@@ -1,0 +1,165 @@
+/* --- ПЕРЕМЕННЫЕ ТЕМ (Бежевая и Графитовая) --- */
+:root.t-lgt { 
+    --bg-g: linear-gradient(135deg, #f5f0e6 0%, #e8dfcf 100%); /* Бежевый */
+    --txt-c: #5c4d4d; 
+    --pan-bg: rgba(255, 255, 255, 0.4); /* Liquid Glass */
+    --pan-brd: rgba(255, 255, 255, 0.6);
+    --btn-bg: rgba(0,0,0,0.06); 
+    --ptrn: radial-gradient(rgba(0,0,0,0.05) 2px, transparent 2px);
+}
+
+:root.t-drk { 
+    --bg-g: linear-gradient(135deg, #2c2f33 0%, #23272a 100%); /* Серый/Графит */
+    --txt-c: #e0e0e0; 
+    --pan-bg: rgba(20, 22, 25, 0.45); /* Liquid Glass */
+    --pan-brd: rgba(255, 255, 255, 0.1);
+    --btn-bg: rgba(255,255,255,0.1); 
+    --ptrn: radial-gradient(rgba(255,255,255,0.05) 2px, transparent 2px);
+}
+
+/* --- БАЗА --- */
+* { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, sans-serif; -webkit-tap-highlight-color: transparent; }
+body { background: var(--bg-g); color: var(--txt-c); transition: background 0.3s ease; height: 100vh; overflow: hidden; }
+.app-cnt { height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+/* Игровая зона */
+.p-stg { flex-grow: 1; display: flex; justify-content: center; align-items: center; position: relative; flex-direction: column; }
+canvas { background: transparent; width: 300px; height: 300px; z-index: 10; outline: none; }
+.p-nm-lbl { position: absolute; top: 70px; font-weight: 900; font-size: 24px; color: var(--txt-c); z-index: 10; text-shadow: 0 2px 4px rgba(0,0,0,0.1); left: 50%; transform: translateX(-50%); }
+
+/* LIQUID GLASS (Стекло) для всех плашек */
+.gls {
+    background: var(--pan-bg); 
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); 
+    border: 1px solid var(--pan-brd); 
+    box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+}
+
+.st-txt { font-size: 14px; font-weight: bold; color: #8ac6d1; padding: 4px 12px; border-radius: 20px; position: absolute; top: 110px; z-index: 20; opacity: 0; transition: 0.3s; pointer-events: none; }
+.st-txt.vis { opacity: 1; }
+
+.st-ovl { position: absolute; top: 20px; right: 20px; width: 160px; border-radius: 16px; padding: 12px; opacity: 0; transition: 0.4s; z-index: 20; }
+.st-ovl.vis { opacity: 1; }
+.st-grp { margin-bottom: 8px; }
+.st-hdr { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.st-bar { height: 8px; background: var(--btn-bg); border-radius: 4px; overflow: hidden; }
+.st-fl { height: 100%; transition: width 0.3s; }
+.f-hng { background: #ffb6b9; } .f-eng { background: #fae3d9; } .f-md { background: #bbded6; }
+
+.btm-isl { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); border-radius: 40px; padding: 10px 20px; display: flex; gap: 15px; z-index: 50; }
+.d-btn { background: transparent; border: none; width: 50px; height: 50px; border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; transition: 0.2s; }
+.d-btn:active { background: var(--btn-bg); transform: scale(0.9); } 
+.d-btn.actv { background: rgba(138, 198, 209, 0.2); }
+.d-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.icn { font-size: 22px; } .lbl { font-size: 9px; margin-top: 4px; font-weight: 600; color: var(--txt-c); }
+
+/* --- МОДАЛЬНОЕ ОКНО (С фоновым паттерном) --- */
+.modl { 
+    position: fixed; top: 100%; left: 0; width: 100%; height: 75%; 
+    background: var(--bg-g); 
+    background-image: var(--ptrn); background-size: 20px 20px; /* Паттерн в горошек */
+    border-radius: 24px 24px 0 0; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 100; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 -10px 40px rgba(0,0,0,0.1); 
+}
+.modl.opn { top: 25%; }
+.m-hdr { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 15px; }
+.c-btn { background: var(--btn-bg); border: none; width: 30px; height: 30px; border-radius: 50%; color: var(--txt-c); cursor: pointer;}
+.m-cnt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+/* Вкладки */
+.tbs { display: flex; background: var(--btn-bg); border-radius: 12px; padding: 4px; margin-bottom: 15px; }
+.tb { flex: 1; padding: 8px; border: none; background: transparent; border-radius: 8px; font-weight: 600; color: var(--txt-c); opacity: 0.6; cursor: pointer; transition: 0.2s; }
+.tb.act { background: var(--pan-bg); opacity: 1; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+
+/* Карточки */
+.i-crd { background: var(--pan-bg); border: 2px solid transparent; border-radius: 16px; padding: 15px 5px; text-align: center; cursor: pointer; transition: 0.2s; backdrop-filter: blur(10px); }
+.i-crd.sel, .i-crd:active { border-color: #8ac6d1; } .i-icn { font-size: 30px; } .i-nm { font-size: 11px; font-weight: bold; }
+
+/* Инпуты и переключатели (iOS Style) */
+.n-inp, .c-inp { padding: 12px; border-radius: 12px; border: 1px solid var(--pan-brd); background: var(--pan-bg); color: var(--txt-c); width: 100%; outline: none; margin-top: 8px; backdrop-filter: blur(10px); }
+.d-btn-lg { width: 100%; padding: 14px; border-radius: 12px; background: #8ac6d1; color: #fff; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
+.d-btn-lg:active { transform: scale(0.98); }
+.s-row { display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 12px; background: var(--pan-bg); border-radius: 16px; border: 1px solid var(--pan-brd); backdrop-filter: blur(10px); }
+
+/* iOS Свитчер */
+.swch { position: relative; display: inline-block; width: 44px; height: 24px; }
+.swch input { opacity: 0; width: 0; height: 0; }
+.swch-sld { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--btn-bg); transition: .3s; border-radius: 24px; }
+.swch-sld:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+input:checked + .swch-sld { background-color: #8ac6d1; }
+input:checked + .swch-sld:before { transform: translateX(20px); }
+
+/* Применяем Liquid Glass к нужным блокам */
+.st-ovl, .btm-isl, .st-txt { 
+    background: var(--pan-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--pan-brd); box-shadow: 0 8px 32px rgba(0,0,0,0.08); 
+}
+
+/* --- ТУТОРИАЛ И ПОГОДА --- */
+#t-ovl { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(3px); z-index: 999; display: none; opacity: 0; transition: 0.3s; pointer-events: none; }
+#t-ovl.actv { display: block; opacity: 1; }
+body.t-on .btm-isl, body.t-on .modl { z-index: 10000 !important; }
+.t-hlt { position: relative; z-index: 10005 !important; pointer-events: auto !important; background: var(--pan-bg) !important; box-shadow: 0 0 20px rgba(255, 255, 255, 0.8) !important; }
+#t-ptr { position: absolute; font-size: 50px; z-index: 10010; pointer-events: none; animation: bnc 0.8s infinite alternate; }
+#t-msg { position: absolute; color: #fff; font-size: 16px; font-weight: bold; text-align: center; z-index: 10010; width: 250px; background: #8ac6d1; padding: 12px; border-radius: 12px; }
+@keyframes bnc { to { transform: translateY(-15px); } }
+
+.wx-cnt { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; overflow: hidden; }
+.wx-pt { position: absolute; top: -10px; width: 4px; height: 4px; border-radius: 50%; }
+.wx-pt.snw { background: #fff; box-shadow: 0 0 5px #fff; animation: fll linear infinite; }
+.wx-pt.rn { background: #8ac6d1; width: 2px; height: 15px; border-radius: 2px; animation: fll linear infinite; }
+@keyframes fll { to { transform: translateY(100vh) translateX(20px); opacity: 0; } }
+.app-cnt {
+    transition: background 0.8s ease, background-image 0.8s ease;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* 1. ДОМ (Комната: обои, плинтус, окно и холодильник CSS-градиентами) */
+.bg-hm {
+    /* Чтобы вставить картинку потом, раскомментируй эту строку: */
+    /* background-image: url('/public/img/home.png'); */
+    
+    background: 
+        /* Окно (квадрат справа) */
+        linear-gradient(to right, rgba(255,255,255,0.4) 2px, transparent 2px) 240px 80px / 60px 80px no-repeat,
+        linear-gradient(to bottom, rgba(255,255,255,0.4) 2px, transparent 2px) 240px 80px / 60px 80px no-repeat,
+        linear-gradient(#8ac6d1, #8ac6d1) 240px 80px / 60px 80px no-repeat,
+        
+        /* Холодильник (серый прямоугольник слева) */
+        linear-gradient(#d3dce6, #d3dce6) 20px 100px / 80px 140px no-repeat,
+        
+        /* Плинтус и пол */
+        linear-gradient(to bottom, transparent 240px, #8b7355 240px, #8b7355 250px, #d2b48c 250px, #d2b48c 100%) center 0 / 100% 100% no-repeat,
+        
+        /* Обои (цвет из темы) */
+        var(--bg-g);
+}
+
+/* 2. УЛИЦА (Игра: Небо и трава) */
+.bg-pl {
+    /* background-image: url('/public/img/street.png'); */
+    
+    background: 
+        /* Солнце */
+        radial-gradient(circle at 80% 20%, #ffd700 0%, #ffd700 20px, transparent 25px) center 0 / 100% 100% no-repeat,
+        /* Трава и небо */
+        linear-gradient(to bottom, #87ceeb 0%, #87ceeb 240px, #7cfc00 240px, #32cd32 100%);
+}
+
+/* 3. ШКАФ (Темное дерево, полки) */
+.bg-wrd {
+    /* background-image: url('/public/img/wardrobe.png'); */
+    
+    background: 
+        /* Полки */
+        linear-gradient(to bottom, transparent 80px, #3e2723 80px, #3e2723 90px, transparent 90px, transparent 180px, #3e2723 180px, #3e2723 190px, transparent 190px) center 0 / 100% 100% no-repeat,
+        
+        /* Задняя стенка шкафа */
+        linear-gradient(to right, #5d4037 0%, #4e342e 50%, #5d4037 100%);
+}
+
+/* Затемняем интерфейс, когда мы на улице или в шкафу, чтобы текст читался лучше */
+.bg-pl .lbl, .bg-wrd .lbl {
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+}
