@@ -183,3 +183,14 @@ body.t-on .btm-isl, body.t-on .modl { z-index: 10000 !important; }
     color: #fff;
     text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
+
+
+/* Анимация для погоды */
+@keyframes fall {
+    0% {
+        transform: translateY(-10vh) rotate(0deg);
+    }
+    100% {
+        transform: translateY(110vh) rotate(360deg);
+    }
+}

@@ -1,184 +1,223 @@
-import React, { useState, useEffect, useRef } from 'react';
-import PRnd from './classes/PetRenderer'; // Убедись, что файл называется PetRenderer.js
-import BottomDock from './components/BottomDock';
-import StatsOverlay from './components/StatsOverlay';
-import Tutorial from './components/Tutorial';
-import WeatherOverlay from './components/WeatherOverlay';
-import NameModal from './components/NameModal';
-import { getPSt, sndAct } from './utils/api';
-import { loc } from './loc';
-
+import React, { useState, useEffect } from 'react';
+import { useProgress, useGLTF } from '@react-three/drei';
 import HomeView from './views/HomeView';
 import PlayView from './views/PlayView';
 import SleepView from './views/SleepView';
 import WardrobeView from './views/WardrobeView';
-import SettingsView from './views/SettingsView';
-
+import DevView from './views/DevView';
 import './index.css';
 
-export default function App() {
-    // === ГЛОБАЛЬНОЕ СОСТОЯНИЕ ===
-    const [stats, setStats] = useState({ hunger: 50, energy: 80, mood: 10 });
-    const [character, setCharacter] = useState('pig'); 
-    const [costume, setCostume] = useState('none');
-    const [petName, setPetName] = useState(''); 
-    
-    // === РОУТИНГ ===
-    const [currentView, setCurrentView] = useState('home');
-    
-    // === БРОНЕБОЙНАЯ ЗАЩИТА НАСТРОЕК ===
-    // Если в localStorage попал мусор (undefined, null), жестко ставим дефолты!
-    const savedTheme = localStorage.getItem('pet_theme');
-    const savedLang = localStorage.getItem('pet_lang');
-    const savedCity = localStorage.getItem('pet_city');
+const ANIMATIONS_LIST = ['idle', 'sleep', 'joy_jump', 'hello', 'fall', 'sick', 'eat'];
 
-    const [theme, setTheme] = useState((savedTheme === 'lgt' || savedTheme === 'drk') ? savedTheme : 'lgt'); 
-    const [lang, setLang] = useState((savedLang === 'ru' || savedLang === 'en') ? savedLang : 'ru'); 
-    const [city, setCity] = useState((savedCity && savedCity !== 'undefined') ? savedCity : 'Moscow'); 
-    const [weather, setWeather] = useState('clr'); 
-    
-    const [isNameModalVisible, setNameModalVisible] = useState(false); 
-    const [toastMessage, setToastMessage] = useState('');
-    
-    // === ТУТОРИАЛ ===
-    const [tutStep, setTutStep] = useState(1); 
-    const [tutPaused, setTutPaused] = useState(false); 
+const loc = {
+    ru: {
+        settings: 'Настройки', theme: 'Тема', lang: 'Язык', city: 'Город', devMode: 'Режим разработчика',
+        home: 'Домой', play: 'Игра', sleep: 'Сон', wardrobe: 'Шкаф', heal: 'Вылечить', loading: 'Загрузка...'
+    },
+    en: {
+        settings: 'Settings', theme: 'Theme', lang: 'Language', city: 'City', devMode: 'Developer Mode',
+        home: 'Home', play: 'Play', sleep: 'Sleep', wardrobe: 'Wardrobe', heal: 'Heal', loading: 'Loading...'
+    }
+};
 
-    // Безопасное получение словаря (защита от белого экрана)
-    const text = loc[lang] || loc['ru']; 
+function LoadingScreen({ l }) {
+    const { active, progress } = useProgress();
+    if (!active) return null;
+    return (
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', background: '#2c3e50', zIndex: 9999, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
+            <h2>{l.loading}</h2>
+            <div style={{ width: '60%', height: '20px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', overflow: 'hidden', marginTop: '20px' }}>
+                <div style={{ width: `${progress}%`, height: '100%', background: '#3498db', transition: 'width 0.3s ease' }} />
+            </div>
+        </div>
+    );
+}
 
-    const showToast = (msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(''), 3000); };
-    const nextTutStep = (nextStep) => { setTutPaused(true); setTimeout(() => { setTutStep(nextStep); setTutPaused(false); }, 2500); };
+function WeatherOverlay({ weather }) {
+    if (weather === 'clr') return null;
+    const isRain = weather === 'rn';
+    const overlayColor = isRain ? 'rgba(0, 30, 80, 0.3)' : 'rgba(255, 255, 255, 0.2)';
+    const symbol = isRain ? '💧' : '❄️';
 
-    const syncWithServer = async () => {
-        const data = await getPSt();
-        if (data) {
-            setStats({ hunger: data.hunger, energy: data.energy, mood: data.mood });
-            if (data.name) setPetName(data.name);
-            if (data.character) setCharacter(data.character);
-            if (data.costume) setCostume(data.costume);
-            if (data.tutorial === 0) setTutStep(0);
-        }
-    };
-
-    const handleNavigation = (newView) => {
-        if (tutPaused) return;
-        setCurrentView(newView);
-
-        let action = null;
-        if (newView === 'home') action = 'feed';
-        if (newView === 'play') action = 'play';
-        if (newView === 'sleep') action = 'sleep';
-
-        if (action) {
-            setStats(prev => {
-                let nextStats = { ...prev };
-                if (action === 'feed') { nextStats.hunger = Math.min(100, nextStats.hunger + 25); nextStats.energy = Math.max(0, nextStats.energy - 5); }
-                if (action === 'play') { nextStats.mood = Math.min(100, nextStats.mood + 30); nextStats.energy = Math.max(0, nextStats.energy - 15); }
-                if (action === 'sleep') { nextStats.energy = Math.min(100, nextStats.energy + 20); }
-                return nextStats;
-            });
-            sndAct(action).then(data => { if(data) setStats({ hunger: data.hunger, energy: data.energy, mood: data.mood }) }).catch(()=>{});
-
-            if (newView === 'play') { showToast(text.pl_t); if (tutStep === 1) nextTutStep(2); }
-            if (newView === 'home') { showToast(text.fd_t); if (tutStep === 2) nextTutStep(3); }
-            if (newView === 'sleep') { showToast(text.slp_t); if (tutStep === 3) nextTutStep(4); }
-        }
-
-        if (newView === 'wardrobe' && tutStep === 4) nextTutStep(5);
-    };
-
-    const handleAction = (actionType, payload = '') => {
-        if (tutPaused) return;
-        if (actionType === 'set_char') { setCharacter(payload); sndAct('set_char', payload).catch(()=>{}); }
-        if (actionType === 'equip_santa') {
-            setCostume('santa'); sndAct('equip_santa').catch(()=>{});
-            if (tutStep === 5) {
-                setTutStep(0); sndAct('tut_done').catch(()=>{}); showToast(text.tut_dn);
-                setTimeout(() => { if (!petName) setNameModalVisible(true); }, 2000);
-            }
-        }
-        if (actionType === 'equip_none') { setCostume('none'); sndAct('equip_none').catch(()=>{}); }
-    };
-
-    const fetchWeather = async () => {
-        if (!city) return;
-
-        const c = city.toLowerCase().trim();
-        if (c === 'снег' || c === 'snow') { setWeather('snw'); return; }
-        if (c === 'дождь' || c === 'rain') { setWeather('rn'); return; }
-        if (c === 'ясно' || c === 'clear') { setWeather('clr'); return; }
-
-        try {
-            // 2. Ищем город
-            const geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${city}&count=1`);
-            const geoData = await geoRes.json();
-
-            if (!geoData.results || geoData.results.length === 0) {
-                console.log('Город не найден');
-                setWeather('clr'); 
-                return;
-            }
-
-            const { latitude, longitude, name } = geoData.results[0];
-
-            // 3. Запрашиваем реальную погоду (Код осадков + Температуру)
-            const wxRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,weather_code`);
-            const wxData = await wxRes.json();
-            
-            const code = wxData.current.weather_code;
-            const temp = wxData.current.temperature_2m;
-
-            // Специально для тебя: открываем консоль браузера (F12) и смотрим реальные данные!
-            console.log(`🌍 Город: ${name} | Температура: ${temp}°C | Код осадков (WMO): ${code}`);
-
-            // 4. Логика осадков
-            if (code >= 51 && code <= 67) {
-                setWeather('rn'); // Морось и дождь
-            } else if (code >= 71 && code <= 86) {
-                setWeather('snw'); // Снег
-            } else if (code >= 95) {
-                setWeather('rn'); // Гроза
-            } else {
-                setWeather('clr'); // Ясно или пасмурно (без осадков)
-            }
-        } catch (error) {
-            console.error('Ошибка API погоды:', error);
-            setWeather('clr');
-        }
-    };
-
-    useEffect(() => { localStorage.setItem('pet_theme', theme); localStorage.setItem('pet_lang', lang); localStorage.setItem('pet_city', city); }, [theme, lang, city]);
-    useEffect(() => { document.documentElement.className = `t-${theme}`; }, [theme]);
-    useEffect(() => { document.body.classList.toggle('t-on', tutStep > 0 && !tutPaused); }, [tutStep, tutPaused]);
-    useEffect(() => { fetchWeather(); }, [city]);
-    useEffect(() => { syncWithServer(); const interval = setInterval(syncWithServer, 3000); return () => clearInterval(interval); }, []);
-
-    // Логика фонов (исправлена комната сна!)
-    let backgroundClass = 'bg-hm'; 
-    if (currentView === 'play') backgroundClass = 'bg-pl'; 
-    if (currentView === 'sleep') backgroundClass = 'bg-slp'; // Добавлен затемненный фон для сна
-    if (currentView === 'wardrobe') backgroundClass = 'bg-wrd'; 
+    const particles = Array.from({ length: 25 }).map((_, i) => ({
+        id: i,
+        left: `${Math.random() * 100}%`,
+        animDuration: `${isRain ? 0.7 + Math.random() * 0.5 : 3 + Math.random() * 3}s`,
+        animDelay: `${Math.random() * 2}s`,
+        opacity: 0.4 + Math.random() * 0.5,
+        fontSize: `${isRain ? 12 + Math.random() * 10 : 16 + Math.random() * 15}px`
+    }));
 
     return (
-        <div className={`app-cnt ${backgroundClass}`}>
-            <WeatherOverlay weather={weather} />
-            {petName && currentView !== 'wardrobe' && currentView !== 'settings' && <div className="p-nm-lbl">{petName}</div>}
-            
-            <div className={`st-txt ${toastMessage ? 'vis' : ''}`}>{toastMessage}</div>
-            <StatsOverlay stats={stats} text={text} />
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: overlayColor, pointerEvents: 'none', zIndex: 50, overflow: 'hidden' }}>
+            {particles.map(p => (
+                <div key={p.id} style={{ position: 'absolute', top: '-10%', left: p.left, opacity: p.opacity, fontSize: p.fontSize, animation: `fall ${p.animDuration} linear infinite`, animationDelay: p.animDelay }}>
+                    {symbol}
+                </div>
+            ))}
+        </div>
+    );
+}
 
-            <div className="vw-wrp">
-                {currentView === 'home'  && <HomeView costume={costume} character={character} />}
-                {currentView === 'play'  && <PlayView costume={costume} character={character} />}
-                {currentView === 'sleep' && <SleepView costume={costume} character={character} />}
-                {currentView === 'wardrobe' && <WardrobeView text={text} character={character} costume={costume} handleAction={handleAction} tutStep={tutStep} />}
-                {currentView === 'settings' && <SettingsView text={text} theme={theme} setTheme={setTheme} lang={lang} setLang={setLang} city={city} setCity={setCity} fetchWeather={fetchWeather} />}
+export default function App() {
+    const [currentView, setCurrentView] = useState('home');
+    const [character, setCharacter] = useState('twilight');
+    const [isGreeting, setIsGreeting] = useState(true);
+
+    const [stats, setStats] = useState({ hunger: 100, energy: 100, mood: 100 });
+    
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+    const [isDevMode, setIsDevMode] = useState(false);
+
+    const [theme, setTheme] = useState(localStorage.getItem('pet_th') || 'drk'); 
+    const [language, setLanguage] = useState(localStorage.getItem('pet_lng') || 'ru'); 
+    const [city, setCity] = useState(localStorage.getItem('pet_cty') || 'Moscow');
+    const [weather, setWeather] = useState('clr'); 
+
+    const isDark = theme === 'drk';
+    const colors = {
+        text: isDark ? '#ffffff' : '#2c3e50',
+        glassBg: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+        modalBg: isDark ? 'rgba(30, 30, 30, 0.5)' : 'rgba(255, 255, 255, 0.6)',
+        border: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
+        shadow: isDark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(31, 38, 135, 0.15)',
+        textShadow: isDark ? '0 1px 3px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
+    };
+
+    const l = loc[language];
+
+    useEffect(() => {
+        const gameLoop = setInterval(() => {
+            setStats(prev => {
+                const isSleeping = currentView === 'sleep';
+                
+                return {
+                    hunger: Math.max(0, prev.hunger - 1),
+                    mood: Math.max(0, prev.mood - 1),
+                    energy: isSleeping ? Math.min(100, prev.energy + 5) : Math.max(0, prev.energy - 1)
+                };
+            });
+        }, 3000); 
+
+        return () => clearInterval(gameLoop);
+    }, [currentView]);
+
+    useEffect(() => { localStorage.setItem('pet_th', theme); }, [theme]);
+    useEffect(() => { localStorage.setItem('pet_lng', language); }, [language]);
+    useEffect(() => { localStorage.setItem('pet_cty', city); }, [city]);
+
+    useEffect(() => { ANIMATIONS_LIST.forEach(anim => useGLTF.preload(`/models/${character}/${anim}.glb`)); }, [character]);
+    useEffect(() => { const timer = setTimeout(() => setIsGreeting(false), 5000); return () => clearTimeout(timer); }, []);
+    useEffect(() => { if (!isDevMode && currentView === 'dev') setCurrentView('home'); }, [isDevMode, currentView]);
+
+    const fetchWeather = () => {
+        const weathers = ['clr', 'rn', 'snw'];
+        setWeather(weathers[Math.floor(Math.random() * 3)]);
+    };
+
+    return (
+        <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
+            <LoadingScreen l={l} />
+            <WeatherOverlay weather={weather} />
+
+            {currentView === 'home' && <HomeView character={character} stats={stats} setStats={setStats} isGreeting={isGreeting} />}
+            {currentView === 'play' && <PlayView character={character} stats={stats} setStats={setStats} isGreeting={isGreeting} />}
+            {currentView === 'sleep' && <SleepView character={character} />}
+            {currentView === 'wardrobe' && <WardrobeView character={character} />}
+            {currentView === 'dev' && isDevMode && <DevView character={character} />}
+            <button 
+                onClick={() => setIsSettingsOpen(true)}
+                style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 100, background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow }}
+            >
+                ⚙️
+            </button>
+
+            {isSettingsOpen && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ background: colors.modalBg, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', border: `1px solid ${colors.border}`, boxShadow: colors.shadow, padding: '25px', borderRadius: '25px', width: '85%', maxWidth: '320px', color: colors.text, textShadow: colors.textShadow, transition: 'all 0.3s ease' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                            <h2 style={{ margin: 0, fontSize: '22px' }}>{l.settings}</h2>
+                            <button onClick={() => setIsSettingsOpen(false)} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>✖</button>
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{l.theme}:</span>
+                                <ToggleSwitch isOn={isDark} onToggle={() => setTheme(isDark ? 'lgt' : 'drk')} iconOn="🌙" iconOff="☀️" isDark={isDark} />
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{l.lang}:</span>
+                                <ToggleSwitch isOn={language === 'en'} onToggle={() => setLanguage(language === 'ru' ? 'en' : 'ru')} iconOn="EN" iconOff="RU" isDark={isDark} />
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{l.city}:</span>
+                                <input type="text" value={city} onChange={e => setCity(e.target.value)} onBlur={fetchWeather} style={{ background: isDark ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)', border: `1px solid ${colors.border}`, color: colors.text, padding: '8px 12px', borderRadius: '12px', width: '100px', outline: 'none', textAlign: 'center', fontWeight: 'bold' }} />
+                            </div>
+                        </div>
+                        
+                        <hr style={{ margin: '25px 0', borderColor: colors.border }} />
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: isDark ? 'rgba(255,0,0,0.1)' : 'rgba(255,0,0,0.05)', padding: '10px 15px', borderRadius: '15px', border: `1px solid ${colors.border}` }}>
+                            <span style={{ fontWeight: 'bold', color: '#ff7675', textShadow: 'none' }}>🛠 {l.devMode}</span>
+                            <ToggleSwitch isOn={isDevMode} onToggle={() => setIsDevMode(!isDevMode)} iconOn="ON" iconOff="OFF" isDark={isDark} />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div style={{ position: 'absolute', bottom: '2%', left: '5%', right: '5%', display: 'flex', justifyContent: 'space-around', background: colors.glassBg, border: `1px solid ${colors.border}`, padding: '15px', borderRadius: '30px', zIndex: 100, backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)', boxShadow: colors.shadow, transition: 'all 0.3s ease' }}>
+                <NavButton icon="🏠" label={l.home} isActive={currentView === 'home'} onClick={() => setCurrentView('home')} colors={colors} />
+                <NavButton icon="🎾" label={l.play} isActive={currentView === 'play'} onClick={() => setCurrentView('play')} colors={colors} />
+                <NavButton icon="🌙" label={l.sleep} isActive={currentView === 'sleep'} onClick={() => setCurrentView('sleep')} colors={colors} />
+                <NavButton icon="👕" label={l.wardrobe} isActive={currentView === 'wardrobe'} onClick={() => setCurrentView('wardrobe')} colors={colors} />
+                {isDevMode && <NavButton icon="🛠" label="Dev" isActive={currentView === 'dev'} onClick={() => setCurrentView('dev')} colors={colors} />}
             </div>
 
-            <BottomDock currentView={currentView} handleNavigation={handleNavigation} text={text} tutStep={tutStep} />
-            {isNameModalVisible && <NameModal text={text} saveName={(nm) => { sndAct('set_name', nm).catch(()=>{}); setPetName(nm); setNameModalVisible(false); }} />}
-            {tutStep > 0 && !tutPaused && <Tutorial tutStep={tutStep} text={text} />}
+            <div style={{ position: 'absolute', top: '20px', right: '20px', background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, padding: '15px', borderRadius: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: colors.shadow }}>
+
+                {isDevMode && <div style={{ fontSize: '11px', textAlign: 'center', color: '#ff7675', marginBottom: '5px', textTransform: 'uppercase', fontWeight: 'bold' }}>🛠 Dev: Клик для -20%</div>}
+
+                <StatBar icon="🍖" value={stats.hunger} color="#ff6b6b" onClick={() => setStats(s => ({...s, hunger: Math.max(0, s.hunger - 20)}))} isInteractive={isDevMode} />
+                <StatBar icon="⚡" value={stats.energy} color="#feca57" onClick={() => setStats(s => ({...s, energy: Math.max(0, s.energy - 20)}))} isInteractive={isDevMode} />
+                <StatBar icon="💖" value={stats.mood} color="#ff9ff3" onClick={() => setStats(s => ({...s, mood: Math.max(0, s.mood - 20)}))} isInteractive={isDevMode} />
+
+                {isDevMode && (
+                    <button onClick={() => setStats({hunger: 100, energy: 100, mood: 100})} style={{marginTop: '10px', background: 'rgba(46, 204, 113, 0.8)', border: 'none', color: 'white', padding: '8px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold'}}>{l.heal}</button>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function NavButton({ icon, label, isActive, onClick, colors }) {
+    return (
+        <button onClick={onClick} style={{ background: isActive ? colors.border : 'transparent', border: 'none', color: colors.text, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', padding: '8px 15px', borderRadius: '15px', cursor: 'pointer', transition: 'all 0.3s ease' }}>
+            <span style={{ fontSize: '24px', textShadow: colors.textShadow }}>{icon}</span>
+            <span style={{ fontSize: '12px', fontWeight: 'bold', textShadow: colors.textShadow }}>{label}</span>
+        </button>
+    );
+}
+
+function StatBar({ icon, value, color, onClick, isInteractive }) {
+    return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', cursor: isInteractive ? 'pointer' : 'default' }} onClick={isInteractive ? onClick : undefined}>
+            <span>{icon}</span>
+            <div style={{ width: '100px', height: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px', overflow: 'hidden', border: '1px solid rgba(150,150,150,0.2)' }}>
+                <div style={{ width: `${value}%`, height: '100%', background: color, transition: 'width 0.3s ease', boxShadow: `0 0 10px ${color}` }} />
+            </div>
+            <span style={{ width: '35px', textAlign: 'right', fontWeight: 'bold' }}>{value}%</span>
+        </div>
+    );
+}
+
+function ToggleSwitch({ isOn, onToggle, iconOn, iconOff, isDark }) {
+    return (
+        <div onClick={onToggle} style={{ width: '60px', height: '30px', background: isOn ? 'rgba(46, 204, 113, 0.7)' : (isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.1)'), borderRadius: '15px', position: 'relative', cursor: 'pointer', border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)'}`, transition: 'background 0.3s' }}>
+            <div style={{ position: 'absolute', top: '2px', left: isOn ? '32px' : '2px', width: '24px', height: '24px', background: 'white', borderRadius: '50%', transition: 'left 0.3s ease', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '10px', color: '#333', fontWeight: 'bold', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>
+                {isOn ? iconOn : iconOff}
+            </div>
         </div>
     );
 }

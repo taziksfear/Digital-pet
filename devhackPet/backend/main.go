@@ -90,14 +90,15 @@ func handleAction(w http.ResponseWriter, r *http.Request) {
 	switch req.Action {
 	case "feed": 
 		p.Hunger = min(100, p.Hunger+25)
-		p.Energy = max(0, p.Energy-5)
+		p.Energy = max(0, p.Energy-0.5)
 		p.State = "idle"
 	case "play": 
 		p.Mood = min(100, p.Mood+30)
-		p.Energy = max(0, p.Energy-15)
+		p.Energy = max(0, p.Energy-1.5)
 		p.State = "play"
 	case "sleep": 
-		p.Energy = min(100, p.Energy+20)
+		p.Energy = min(100, p.Energy+10)
+		p.Hunger = max(0, p.Hunger-0.5)
 		p.State = "sleep"
 	case "idle": 
 		p.State = "idle"

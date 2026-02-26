@@ -16,13 +16,11 @@ export default function Wardrobe({ currentCharacter, currentCostume, onAction })
                 >Костюмы</button>
             </div>
 
-            {/* Вкладка: Персонажи */}
             {activeTab === 'chars' && (
                 <div className="grid-layout active">
                     <div className={`item-card ${currentCharacter === 'pig' ? 'selected' : ''}`}>
                         <div className="item-icon">🐷</div><div className="item-name">Свинка</div>
                     </div>
-                    {/* Другие персонажи можно добавить сюда позже */}
                 </div>
             )}
 
