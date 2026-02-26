@@ -53,17 +53,37 @@ canvas { background: transparent; width: 300px; height: 300px; z-index: 10; outl
 .d-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 .icn { font-size: 22px; } .lbl { font-size: 9px; margin-top: 4px; font-weight: 600; color: var(--txt-c); }
 
-/* --- МОДАЛЬНОЕ ОКНО (С фоновым паттерном) --- */
-.modl { 
-    position: fixed; top: 100%; left: 0; width: 100%; height: 75%; 
-    background: var(--bg-g); 
-    background-image: var(--ptrn); background-size: 20px 20px; /* Паттерн в горошек */
-    border-radius: 24px 24px 0 0; transition: 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); z-index: 100; padding: 20px; display: flex; flex-direction: column; box-shadow: 0 -10px 40px rgba(0,0,0,0.1); 
+/* компоненты, нахуй модалки!!!!!!!! */
+.vw-wrp {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    position: relative;
 }
-.modl.opn { top: 25%; }
-.m-hdr { display: flex; justify-content: space-between; align-items: center; padding-bottom: 15px; margin-bottom: 15px; }
-.c-btn { background: var(--btn-bg); border: none; width: 30px; height: 30px; border-radius: 50%; color: var(--txt-c); cursor: pointer;}
-.m-cnt { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+
+.v-scrn {
+    width: 90%;
+    max-width: 350px;
+    background: var(--pan-bg);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--pan-brd);
+    border-radius: 24px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    animation: fIn 0.3s ease-out forwards;
+}
+
+@keyframes fIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.bg-slp {
+    background: var(--bg-g);
+    filter: brightness(0.4) saturate(0.5); /* Затемняем комнату для сна */
+}
 
 /* Вкладки */
 .tbs { display: flex; background: var(--btn-bg); border-radius: 12px; padding: 4px; margin-bottom: 15px; }

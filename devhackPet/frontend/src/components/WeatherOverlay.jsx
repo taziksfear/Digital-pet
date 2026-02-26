@@ -1,12 +1,12 @@
 import React from 'react';
 
-export default function WxOvl({ wx }) {
-    if (wx === 'clr') return null;
+export default function WeatherOverlay({ weather }) {
+    if (weather === 'clr') return null;
 
     const pts = Array.from({ length: 20 }).map((_, i) => (
         <div 
             key={i} 
-            className={`wx-pt ${wx}`} 
+            className={`wx-pt ${weather}`} 
             style={{ 
                 left: `${Math.random() * 100}%`, 
                 animationDuration: `${Math.random() * 2 + 1}s`, 

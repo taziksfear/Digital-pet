@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 
-export default function NMod({ l, sNm }) {
+export default function NameModal({ text, saveName }) {
     const [v, setV] = useState('');
 
     return (
         <div className="modl opn" style={{ zIndex: 2000 }}>
             <div className="m-hdr">
-                <h3>{l.nm_q}</h3>
+                <h3>{text.nm_q}</h3>
             </div>
             
             <div className="m-cnt" style={{ display: 'flex', flexDirection: 'column', gap: '15px', padding: '20px' }}>
@@ -19,9 +19,9 @@ export default function NMod({ l, sNm }) {
                 
                 <button 
                     className="d-btn-lg" 
-                    onClick={() => { if (v) sNm(v); }}
+                    onClick={() => { if (v) saveName(v); }}
                 >
-                    {l.sv}
+                    {text.sv}
                 </button>
             </div>
         </div>

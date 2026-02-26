@@ -11,26 +11,26 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type PSt struct {
-	Hng  float64 `json:"hng"`
-	Eng  float64 `json:"eng"`
-	Md   float64 `json:"md"`
-	St   string  `json:"st"`
-	Char string  `json:"char"`
-	Nm   string  `json:"nm"`
-	Cstm string  `json:"cstm"`
-	Tut  int     `json:"tut"`
+type PetState struct {
+	Hunger    float64 `json:"hunger"`
+	Energy    float64 `json:"energy"`
+	Mood      float64 `json:"mood"`
+	State     string  `json:"state"`     // idle, play, slp, brd
+	Character string  `json:"character"` // pig, fluffy, eye
+	Name      string  `json:"name"`
+	Costume   string  `json:"costume"`
+	Tutorial  int     `json:"tutorial"`  // 0 = пройден
 }
 
-type ActReq struct {
-	UId string `json:"uId"`
-	Act string `json:"act"`
-	PLd string `json:"pLd"`
+type ActionRequest struct {
+	UserID  string `json:"userId"`
+	Action  string `json:"action"`
+	Payload string `json:"payload"`
 }
 
 var (
 	db *sql.DB
-	mu sync.Mutex // Глобальный замок, чтобы запросы выполнялись строго по очереди!
+	mu sync.Mutex
 )
 
 func initDB() {
@@ -38,112 +38,109 @@ func initDB() {
 	db, err = sql.Open("sqlite3", "./pets.db")
 	if err != nil { log.Fatal(err) }
 
-	q := `CREATE TABLE IF NOT EXISTS pts (
-		uId TEXT PRIMARY KEY, hng REAL, eng REAL, md REAL, 
-		st TEXT, char TEXT, nm TEXT, cstm TEXT, tut INTEGER
+	q := `CREATE TABLE IF NOT EXISTS pets (
+		userId TEXT PRIMARY KEY, hunger REAL, energy REAL, mood REAL, 
+		state TEXT, character TEXT, name TEXT, costume TEXT, tutorial INTEGER
 	);`
 	_, err = db.Exec(q)
 	if err != nil { log.Fatal(err) }
 }
 
-// Вспомогательная функция (вызывать только внутри mu.Lock!)
-func getPetData(uId string) *PSt {
-	p := &PSt{}
-	r := db.QueryRow("SELECT hng, eng, md, st, char, nm, cstm, tut FROM pts WHERE uId = ?", uId)
-	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut)
+func getPetData(userId string) *PetState {
+	p := &PetState{}
+	r := db.QueryRow("SELECT hunger, energy, mood, state, character, name, costume, tutorial FROM pets WHERE userId = ?", userId)
+	err := r.Scan(&p.Hunger, &p.Energy, &p.Mood, &p.State, &p.Character, &p.Name, &p.Costume, &p.Tutorial)
 	
 	if err == sql.ErrNoRows {
-		p = &PSt{Hng: 50, Eng: 80, Md: 60, St: "brd", Char: "pig", Nm: "", Cstm: "none", Tut: 1}
-		db.Exec("INSERT INTO pts (uId, hng, eng, md, st, char, nm, cstm, tut) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uId, p.Hng, p.Eng, p.Md, p.St, p.Char, p.Nm, p.Cstm, p.Tut)
+		p = &PetState{Hunger: 50, Energy: 80, Mood: 60, State: "bored", Character: "pig", Name: "", Costume: "none", Tutorial: 1}
+		db.Exec("INSERT INTO pets (userId, hunger, energy, mood, state, character, name, costume, tutorial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			userId, p.Hunger, p.Energy, p.Mood, p.State, p.Character, p.Name, p.Costume, p.Tutorial)
 	}
 	return p
 }
 
-func cors(n http.HandlerFunc) http.HandlerFunc {
+func cors(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == "OPTIONS" { w.WriteHeader(200); return }
-		n(w, r)
+		next(w, r)
 	}
 }
 
-func hGet(w http.ResponseWriter, r *http.Request) {
-	uId := r.URL.Query().Get("uId")
+func handleGet(w http.ResponseWriter, r *http.Request) {
+	userId := r.URL.Query().Get("userId")
 	
 	mu.Lock()
-	p := getPetData(uId)
+	p := getPetData(userId)
 	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(p)
 }
 
-func hAct(w http.ResponseWriter, r *http.Request) {
-	var rq ActReq
-	json.NewDecoder(r.Body).Decode(&rq)
+func handleAction(w http.ResponseWriter, r *http.Request) {
+	var req ActionRequest
+	json.NewDecoder(r.Body).Decode(&req)
 	
-	mu.Lock() // ЗАМОК! Теперь база 100% не перезапишется криво
-	p := getPetData(rq.UId)
+	mu.Lock()
+	p := getPetData(req.UserID)
 	
-	switch rq.Act {
-	case "fd": 
-		p.Hng = min(100, p.Hng+25)
-		p.Eng = max(0, p.Eng-5)
-		p.St = "idle"
-	case "pl": 
-		p.Md = min(100, p.Md+30) // Мгновенный прирост радости
-		p.Eng = max(0, p.Eng-15)
-		p.St = "play"
-	case "slp": 
-		p.Eng = min(100, p.Eng+20) // Мгновенный прирост энергии
-		p.St = "slp"
+	switch req.Action {
+	case "feed": 
+		p.Hunger = min(100, p.Hunger+25)
+		p.Energy = max(0, p.Energy-5)
+		p.State = "idle"
+	case "play": 
+		p.Mood = min(100, p.Mood+30)
+		p.Energy = max(0, p.Energy-15)
+		p.State = "play"
+	case "sleep": 
+		p.Energy = min(100, p.Energy+20)
+		p.State = "sleep"
 	case "idle": 
-		p.St = "idle"
-	case "set_nm": p.Nm = rq.PLd
-	case "set_char": p.Char = rq.PLd
-	case "eq_snt": p.Cstm = "snt"
-	case "eq_non": p.Cstm = "none"
-	case "tut_dn": p.Tut = 0
+		p.State = "idle"
+	case "set_name": p.Name = req.Payload
+	case "set_char": p.Character = req.Payload
+	case "equip_santa": p.Costume = "santa"
+	case "equip_none": p.Costume = "none"
+	case "tut_done": p.Tutorial = 0
 	}
 	
-	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, st=?, char=?, nm=?, cstm=?, tut=? WHERE uId=?",
-		p.Hng, p.Eng, p.Md, p.St, p.Char, p.Nm, p.Cstm, p.Tut, rq.UId)
-	mu.Unlock() // Отпускаем замок
+	db.Exec("UPDATE pets SET hunger=?, energy=?, mood=?, state=?, character=?, name=?, costume=?, tutorial=? WHERE userId=?",
+		p.Hunger, p.Energy, p.Mood, p.State, p.Character, p.Name, p.Costume, p.Tutorial, req.UserID)
+	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(p)
 }
 
-func wrk() {
-	tk := time.NewTicker(1 * time.Second)
-	for range tk.C {
+func worker() {
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
 		mu.Lock()
 		
-		// 1. Сначала читаем всё в память и ЗАКРЫВАЕМ поток чтения
-		type uData struct { id string; hng, eng, md float64; st string }
-		var uds []uData
+		type userData struct { id string; hunger, energy, mood float64; state string }
+		var users []userData
 		
-		r, err := db.Query("SELECT uId, hng, eng, md, st FROM pts")
+		rows, err := db.Query("SELECT userId, hunger, energy, mood, state FROM pets")
 		if err == nil {
-			for r.Next() {
-				var d uData
-				r.Scan(&d.id, &d.hng, &d.eng, &d.md, &d.st)
-				uds = append(uds, d)
+			for rows.Next() {
+				var u userData
+				rows.Scan(&u.id, &u.hunger, &u.energy, &u.mood, &u.state)
+				users = append(users, u)
 			}
-			r.Close() // ВАЖНО: Закрываем чтение, чтобы не словить database is locked!
+			rows.Close()
 		}
 		
-		// 2. Только теперь пишем
-		for _, d := range uds {
-			switch d.st {
-			case "slp": d.eng = min(100, d.eng+3); d.hng = max(0, d.hng-0.2)
-			case "play": d.md = min(100, d.md+2); d.eng = max(0, d.eng-1.5); d.hng = max(0, d.hng-0.8)
-			case "idle", "brd": d.eng = max(0, d.eng-0.3); d.hng = max(0, d.hng-0.5); d.md = max(0, d.md-0.4)
+		for _, u := range users {
+			switch u.state {
+			case "sleep": u.energy = min(100, u.energy+4); u.hunger = max(0, u.hunger-0.1)
+			case "play": u.mood = min(100, u.mood+2); u.energy = max(0, u.energy-1.5); u.hunger = max(0, u.hunger-0.3)
+			case "idle", "bored": u.energy = max(0, u.energy-0.3); u.hunger = max(0, u.hunger-0.5); u.mood = max(0, u.mood-0.4)
 			}
-			db.Exec("UPDATE pts SET hng=?, eng=?, md=? WHERE uId=?", d.hng, d.eng, d.md, d.id)
+			db.Exec("UPDATE pets SET hunger=?, energy=?, mood=? WHERE userId=?", u.hunger, u.energy, u.mood, u.id)
 		}
 		mu.Unlock()
 	}
@@ -154,9 +151,11 @@ func max(a, b float64) float64 { if a > b { return a }; return b }
 
 func main() {
 	initDB()
-	go wrk()
-	http.HandleFunc("/api/pet", cors(hGet))
-	http.HandleFunc("/api/act", cors(hAct))
-	log.Println("SQLite Бэкенд запущен: 8080")
+	go worker()
+	http.HandleFunc("/api/pet", cors(handleGet))
+	http.HandleFunc("/api/act", cors(handleAction))
+	fs := http.FileServer(http.Dir("../frontend/dist"))
+	http.Handle("/", fs)
+	log.Println("Backend started on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
-export default function Tut({ stp }) {
+export default function Tutorial({ tutStep, text }) {
     const [ps, setPs] = useState({ t: 0, lf: 0, s: false, tx: '' });
 
     useEffect(() => {
@@ -8,13 +8,12 @@ export default function Tut({ stp }) {
         let txt = '';
         let oY = -60;
         
-        // Жестко задаем текст, чтобы избежать ошибки с "Уиии"
-        switch (stp) {
-            case 1: tId = 'btn-pl'; txt = 'Нажми сюда, чтобы поиграть со свинкой!'; break;
-            case 2: tId = 'btn-hm'; txt = 'Она проголодалась! Нажми Домой и покорми её.'; break;
-            case 3: tId = 'btn-slp'; txt = 'Свинка устала. Отправь её спать!'; break;
-            case 4: tId = 'btn-wrd'; txt = 'Она хочет переодеться! Открой шкаф.'; break;
-            case 5: tId = 'cst-snt'; txt = 'Примерь новогодний колпак!'; oY = -40; break;
+        switch (tutStep) {
+            case 1: tId = 'btn-pl'; txt = text.t1; break;
+            case 2: tId = 'btn-hm'; txt = text.t2; break;
+            case 3: tId = 'btn-slp'; txt = text.t3; break;
+            case 4: tId = 'btn-wrd'; txt = text.t4; break;
+            case 5: tId = 'cst-snt'; txt = text.t5; oY = -40; break;
             default: return;
         }
 
@@ -32,7 +31,7 @@ export default function Tut({ stp }) {
         }, 100);
 
         return () => clearTimeout(tmr);
-    }, [stp]);
+    }, [tutStep, text]);
 
     if (!ps.s) return <div id="t-ovl" className="actv"></div>;
     
