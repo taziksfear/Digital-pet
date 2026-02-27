@@ -11,21 +11,21 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type PetState struct {
-	Hunger    float64 `json:"hunger"`
-	Energy    float64 `json:"energy"`
-	Mood      float64 `json:"mood"`
-	State     string  `json:"state"`     // idle, play, slp, brd
-	Character string  `json:"character"` // pig, fluffy, eye
-	Name      string  `json:"name"`
-	Costume   string  `json:"costume"`
-	Tutorial  int     `json:"tutorial"`  // 0 = пройден
+type PSt struct {
+	Hng  float64 `json:"hng"`
+	Eng  float64 `json:"eng"`
+	Md   float64 `json:"md"`
+	St   string  `json:"st"`
+	Char string  `json:"char"`
+	Nm   string  `json:"nm"`
+	Cstm string  `json:"cstm"`
+	Tut  int     `json:"tut"`
 }
 
-type ActionRequest struct {
-	UserID  string `json:"userId"`
-	Action  string `json:"action"`
-	Payload string `json:"payload"`
+type ActReq struct {
+	UId string `json:"uId"`
+	Act string `json:"act"`
+	PLd string `json:"pLd"`
 }
 
 var (
@@ -38,110 +38,119 @@ func initDB() {
 	db, err = sql.Open("sqlite3", "./pets.db")
 	if err != nil { log.Fatal(err) }
 
-	q := `CREATE TABLE IF NOT EXISTS pets (
-		userId TEXT PRIMARY KEY, hunger REAL, energy REAL, mood REAL, 
-		state TEXT, character TEXT, name TEXT, costume TEXT, tutorial INTEGER
+	q := `CREATE TABLE IF NOT EXISTS pts (
+		uId TEXT PRIMARY KEY, hng REAL, eng REAL, md REAL, 
+		st TEXT, char TEXT, nm TEXT, cstm TEXT, tut INTEGER
 	);`
 	_, err = db.Exec(q)
 	if err != nil { log.Fatal(err) }
 }
 
-func getPetData(userId string) *PetState {
-	p := &PetState{}
-	r := db.QueryRow("SELECT hunger, energy, mood, state, character, name, costume, tutorial FROM pets WHERE userId = ?", userId)
-	err := r.Scan(&p.Hunger, &p.Energy, &p.Mood, &p.State, &p.Character, &p.Name, &p.Costume, &p.Tutorial)
+func getPetData(uId string) *PSt {
+	p := &PSt{}
+	r := db.QueryRow("SELECT hng, eng, md, st, char, nm, cstm, tut FROM pts WHERE uId = ?", uId)
+	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut)
 	
 	if err == sql.ErrNoRows {
-		p = &PetState{Hunger: 50, Energy: 80, Mood: 60, State: "bored", Character: "pig", Name: "", Costume: "none", Tutorial: 1}
-		db.Exec("INSERT INTO pets (userId, hunger, energy, mood, state, character, name, costume, tutorial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			userId, p.Hunger, p.Energy, p.Mood, p.State, p.Character, p.Name, p.Costume, p.Tutorial)
+		p = &PSt{Hng: 50, Eng: 80, Md: 60, St: "brd", Char: "pig", Nm: "", Cstm: "none", Tut: 1}
+		db.Exec("INSERT INTO pts (uId, hng, eng, md, st, char, nm, cstm, tut) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uId, p.Hng, p.Eng, p.Md, p.St, p.Char, p.Nm, p.Cstm, p.Tut)
 	}
 	return p
 }
 
-func cors(next http.HandlerFunc) http.HandlerFunc {
+func cors(n http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 		if r.Method == "OPTIONS" { w.WriteHeader(200); return }
-		next(w, r)
+		n(w, r)
 	}
 }
 
-func handleGet(w http.ResponseWriter, r *http.Request) {
-	userId := r.URL.Query().Get("userId")
+func hGet(w http.ResponseWriter, r *http.Request) {
+	uId := r.URL.Query().Get("uId")
 	
 	mu.Lock()
-	p := getPetData(userId)
+	p := getPetData(uId)
 	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(p)
 }
 
-func handleAction(w http.ResponseWriter, r *http.Request) {
-	var req ActionRequest
-	json.NewDecoder(r.Body).Decode(&req)
+func hAct(w http.ResponseWriter, r *http.Request) {
+	var rq ActReq
+	json.NewDecoder(r.Body).Decode(&rq)
 	
 	mu.Lock()
-	p := getPetData(req.UserID)
+	p := getPetData(rq.UId)
 	
-	switch req.Action {
-	case "feed": 
-		p.Hunger = min(100, p.Hunger+25)
-		p.Energy = max(0, p.Energy-0.5)
-		p.State = "idle"
-	case "play": 
-		p.Mood = min(100, p.Mood+30)
-		p.Energy = max(0, p.Energy-1.5)
-		p.State = "play"
-	case "sleep": 
-		p.Energy = min(100, p.Energy+10)
-		p.Hunger = max(0, p.Hunger-0.5)
-		p.State = "sleep"
+	switch rq.Act {
+	case "fd": 
+		p.Hng = min(100, p.Hng+25)
+		p.Eng = max(0, p.Eng-5)
+		p.St = "idle"
+	case "pl": 
+		p.Md = min(100, p.Md+30)
+		p.Eng = max(0, p.Eng-15)
+		p.St = "play"
+	case "slp": 
+		p.St = "slp"
 	case "idle": 
-		p.State = "idle"
-	case "set_name": p.Name = req.Payload
-	case "set_char": p.Character = req.Payload
-	case "equip_santa": p.Costume = "santa"
-	case "equip_none": p.Costume = "none"
-	case "tut_done": p.Tutorial = 0
+		p.St = "idle"
+
+    case "heal":
+        p.Hng, p.Eng, p.Md = 100, 100, 100
+        p.St = "idle"
+    case "dev_minus_hng":
+        p.Hng = max(0, p.Hng-20)
+    case "dev_minus_eng":
+        p.Eng = max(0, p.Eng-20)
+    case "dev_minus_md":
+        p.Md = max(0, p.Md-20)
+
+	case "set_nm": p.Nm = rq.PLd
+	case "set_char": p.Char = rq.PLd
+	case "eq_snt": p.Cstm = "snt"
+	case "eq_non": p.Cstm = "none"
+	case "tut_dn": p.Tut = 0
 	}
 	
-	db.Exec("UPDATE pets SET hunger=?, energy=?, mood=?, state=?, character=?, name=?, costume=?, tutorial=? WHERE userId=?",
-		p.Hunger, p.Energy, p.Mood, p.State, p.Character, p.Name, p.Costume, p.Tutorial, req.UserID)
+	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, st=?, char=?, nm=?, cstm=?, tut=? WHERE uId=?",
+		p.Hng, p.Eng, p.Md, p.St, p.Char, p.Nm, p.Cstm, p.Tut, rq.UId)
 	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(p)
 }
 
-func worker() {
-	ticker := time.NewTicker(1 * time.Second)
-	for range ticker.C {
+func wrk() {
+	tk := time.NewTicker(1 * time.Second)
+	for range tk.C {
 		mu.Lock()
 		
-		type userData struct { id string; hunger, energy, mood float64; state string }
-		var users []userData
+		type uData struct { id string; hng, eng, md float64; st string }
+		var uds []uData
 		
-		rows, err := db.Query("SELECT userId, hunger, energy, mood, state FROM pets")
+		r, err := db.Query("SELECT uId, hng, eng, md, st FROM pts")
 		if err == nil {
-			for rows.Next() {
-				var u userData
-				rows.Scan(&u.id, &u.hunger, &u.energy, &u.mood, &u.state)
-				users = append(users, u)
+			for r.Next() {
+				var d uData
+				r.Scan(&d.id, &d.hng, &d.eng, &d.md, &d.st)
+				uds = append(uds, d)
 			}
-			rows.Close()
+			r.Close()
 		}
 		
-		for _, u := range users {
-			switch u.state {
-			case "sleep": u.energy = min(100, u.energy+4); u.hunger = max(0, u.hunger-0.1)
-			case "play": u.mood = min(100, u.mood+2); u.energy = max(0, u.energy-1.5); u.hunger = max(0, u.hunger-0.3)
-			case "idle", "bored": u.energy = max(0, u.energy-0.3); u.hunger = max(0, u.hunger-0.5); u.mood = max(0, u.mood-0.4)
+		for _, d := range uds {
+			switch d.st {
+			case "slp": d.eng = min(100, d.eng+0.1); d.hng = max(0, d.hng-0.5); d.md = max(0, d.md-1)
+			case "play": d.md = min(100, d.md+2); d.eng = max(0, d.eng-2); d.hng = max(0, d.hng-1)
+			case "idle", "brd": d.eng = max(0, d.eng-0.5); d.hng = max(0, d.hng-1); d.md = max(0, d.md-0.5)
 			}
-			db.Exec("UPDATE pets SET hunger=?, energy=?, mood=? WHERE userId=?", u.hunger, u.energy, u.mood, u.id)
+			db.Exec("UPDATE pts SET hng=?, eng=?, md=? WHERE uId=?", d.hng, d.eng, d.md, d.id)
 		}
 		mu.Unlock()
 	}
@@ -152,11 +161,9 @@ func max(a, b float64) float64 { if a > b { return a }; return b }
 
 func main() {
 	initDB()
-	go worker()
-	http.HandleFunc("/api/pet", cors(handleGet))
-	http.HandleFunc("/api/act", cors(handleAction))
-	fs := http.FileServer(http.Dir("../frontend/dist"))
-	http.Handle("/", fs)
-	log.Println("Backend started on :8080")
+	go wrk()
+	http.HandleFunc("/api/pet", cors(hGet))
+	http.HandleFunc("/api/act", cors(hAct))
+	log.Println("SQLite Бэкенд запущен: 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
