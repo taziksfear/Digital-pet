@@ -34,13 +34,13 @@ export default function BottomDock({ currentView, handleNavigation, text, tutSte
             </button>
 
             <button 
-                id="btn-wrd" 
-                className={`d-btn ${currentView === 'wardrobe' ? 'actv' : ''} ${tutStep === 4 ? 't-hlt' : ''}`} 
-                onClick={() => handleNavigation('wardrobe')}
-                disabled={tutStep > 0 && tutStep !== 4}
+                id="btn-tlt" 
+                className={`d-btn ${currentView === 'toilet' ? 'actv' : ''}`} 
+                onClick={() => handleNavigation('toilet')}
+                disabled={tutStep > 0}
             >
-                <span className="icn">👕</span>
-                <span className="lbl">{text.wrd}</span>
+                <span className="icn">🚽</span>
+                <span className="lbl">{text.tlt || 'Туалет'}</span>
             </button>
 
             <button 

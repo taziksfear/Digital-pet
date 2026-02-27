@@ -3,17 +3,20 @@ import { useProgress, useGLTF } from '@react-three/drei';
 import HomeView from './views/HomeView';
 import PlayView from './views/PlayView';
 import SleepView from './views/SleepView';
+import ToiletView from './views/ToiletView';
 import WardrobeView from './views/WardrobeView';
 import DevView from './views/DevView';
+import WheelOfFortune from './components/WheelOfFortune';
+import WardrobeModal from './components/WardrobeModal';
 import './index.css';
 
-const ANIMATIONS_LIST = ['idle', 'sleep', 'joy_jump', 'hello', 'fall', 'sick', 'eat'];
+const ANIMATIONS_LIST = ['idle', 'sleep', 'joy_jump', 'hello', 'fall', 'sick', 'eat', 'toilet'];
 
 // СЛОВАРЬ (Для перевода кнопок)
 const loc = {
     ru: {
         settings: 'Настройки', theme: 'Тема', lang: 'Язык', city: 'Город', devMode: 'Режим разработчика',
-        home: 'Домой', play: 'Игра', sleep: 'Сон', wardrobe: 'Шкаф', heal: 'Вылечить', loading: 'Загрузка...',
+        home: 'Домой', play: 'Игра', sleep: 'Сон', toilet: 'Туалет', heal: 'Вылечить', loading: 'Загрузка...',
         ar: 'AR', games: 'Игры', gamesModalTitle: 'Выбери игру', playGame: 'Играть', close: 'Закрыть',
         closeAd: 'Закрыть рекламу', shop: 'Магазин', buy: 'Купить', coins: 'монет',
         followLink: 'Перейти по ссылке (+50 монет)',
@@ -23,11 +26,18 @@ const loc = {
         voice: 'Голос', voiceModalTitle: 'Голосовое общение', startRecord: 'Начать запись',
         stopRecord: 'Остановить', send: 'Отправить', restart: 'Заново', cancel: 'Отмена',
         recording: 'Идёт запись...', thinking: 'Думаю...', reasoning: 'Рассуждаю...',
-        viewFull: 'Посмотреть всё'
+        viewFull: 'Посмотреть всё',
+        tl: 'Туалет',
+        wheel: 'Колесо фортуны',
+        wardrobe: 'Гардероб',
+        changeClothes: 'Переодеться',
+        characters: 'Персонажи',
+        unlock: 'Получить',
+        locked: 'Заблокировано'
     },
     en: {
         settings: 'Settings', theme: 'Theme', lang: 'Language', city: 'City', devMode: 'Developer Mode',
-        home: 'Home', play: 'Play', sleep: 'Sleep', wardrobe: 'Wardrobe', heal: 'Heal', loading: 'Loading...',
+        home: 'Home', play: 'Play', sleep: 'Sleep', toilet: 'Toilet', heal: 'Heal', loading: 'Loading...',
         ar: 'AR', games: 'Games', gamesModalTitle: 'Choose game', playGame: 'Play', close: 'Close',
         closeAd: 'Close ad', shop: 'Shop', buy: 'Buy', coins: 'coins',
         followLink: 'Follow link (+50 coins)',
@@ -37,7 +47,14 @@ const loc = {
         voice: 'Voice', voiceModalTitle: 'Voice chat', startRecord: 'Start recording',
         stopRecord: 'Stop', send: 'Send', restart: 'Restart', cancel: 'Cancel',
         recording: 'Recording...', thinking: 'Thinking...', reasoning: 'Reasoning...',
-        viewFull: 'View full'
+        viewFull: 'View full',
+        tl: 'Toilet',
+        wheel: 'Wheel of Fortune',
+        wardrobe: 'Wardrobe',
+        changeClothes: 'Change clothes',
+        characters: 'Characters',
+        unlock: 'Unlock',
+        locked: 'Locked'
     }
 };
 
@@ -89,9 +106,10 @@ export default function App() {
     const [character, setCharacter] = useState('twilight');
     const [isGreeting, setIsGreeting] = useState(true);
     
-    // БАЗОВЫЕ СТАТЫ (Используем ключи сервера: hng, eng, md)
-    const [stats, setStats] = useState({ hng: 100, eng: 100, md: 100 });
-    const PLAYER_ID = "test_user_1"; // Временный ID для тестов БД
+    // БАЗОВЫЕ СТАТЫ (с сервера)
+    const [stats, setStats] = useState({ hng: 100, eng: 100, md: 100, tl: 50 });
+    const [balance, setBalance] = useState(1000); // баланс с сервера
+    const PLAYER_ID = "test_user_1";
     
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isDevMode, setIsDevMode] = useState(false);
@@ -100,8 +118,7 @@ export default function App() {
     const [language, setLanguage] = useState(localStorage.getItem('pet_lng') || 'ru'); 
     const [city, setCity] = useState(localStorage.getItem('pet_cty') || 'Moscow');
     const [weather, setWeather] = useState('clr'); 
-    const [isRescuing, setIsRescuing] = useState(false); // из версии друга
-    const [balance, setBalance] = useState(0);
+    const [isRescuing, setIsRescuing] = useState(false);
 
     const [isGamesOpen, setIsGamesOpen] = useState(false);
     const [isAdModalOpen, setIsAdModalOpen] = useState(false);
@@ -111,6 +128,10 @@ export default function App() {
     const [isQuestsOpen, setIsQuestsOpen] = useState(false);
     const [quests, setQuests] = useState(initialQuests);
     const [claimingQuestId, setClaimingQuestId] = useState(null);
+
+    const [isWardrobeOpen, setIsWardrobeOpen] = useState(false);
+    const [isWheelOpen, setIsWheelOpen] = useState(false);
+    const [unlockedCharacters, setUnlockedCharacters] = useState(['twilight']);
 
     // Голосовое общение
     const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
@@ -125,13 +146,11 @@ export default function App() {
     const [showFullResponse, setShowFullResponse] = useState(false);
     const thinkingInterval = useRef(null);
 
-    // Новые состояния для облачка
     const [showBubble, setShowBubble] = useState(false);
     const [bubbleText, setBubbleText] = useState('');
     const bubbleTimer = useRef(null);
 
-    // Добавляем реф для хранения чанков во время записи (чтобы избежать замыканий)
-    const recordedChunksRef = useRef([]);
+    const toiletInterval = useRef(null);
 
     const isDark = theme === 'drk';
     const colors = {
@@ -140,7 +159,6 @@ export default function App() {
         shadow: isDark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(31, 38, 135, 0.15)', textShadow: isDark ? '0 1px 3px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
     };
     
-    // ТА САМАЯ ПЕРЕМЕННАЯ, ИЗ-ЗА КОТОРОЙ БЫЛА ОШИБКА:
     const l = loc[language];
 
     // ОТПРАВКА НА СЕРВЕР GO
@@ -151,7 +169,17 @@ export default function App() {
             body: JSON.stringify({ uId: PLAYER_ID, act: actionName, pLd: payload })
         })
         .then(res => res.json())
-        .then(data => { if (data && data.hng !== undefined) setStats(data); })
+        .then(data => { 
+            if (data) {
+                setStats({ 
+                    hng: data.hng, 
+                    eng: data.eng, 
+                    md: data.md, 
+                    tl: data.tl !== undefined ? data.tl : 50 
+                });
+                if (data.balance !== undefined) setBalance(data.balance);
+            }
+        })
         .catch(err => console.log("Бэкенд недоступен"));
     };
 
@@ -160,7 +188,17 @@ export default function App() {
         const fetchStats = () => {
             fetch(`/api/pet?uId=${PLAYER_ID}`)
                 .then(res => res.json())
-                .then(data => { if (data && data.hng !== undefined) setStats(data); })
+                .then(data => { 
+                    if (data) {
+                        setStats({ 
+                            hng: data.hng, 
+                            eng: data.eng, 
+                            md: data.md, 
+                            tl: data.tl !== undefined ? data.tl : 50 
+                        });
+                        if (data.balance !== undefined) setBalance(data.balance);
+                    }
+                })
                 .catch(err => console.log("Бэкенд недоступен"));
         };
         fetchStats();
@@ -171,11 +209,9 @@ export default function App() {
     // Проверка на смерть и запуск спасения
     useEffect(() => {
         const isDead = Math.floor(stats.hng) <= 0 && Math.floor(stats.eng) <= 0 && Math.floor(stats.md) <= 0;
-
         if (isDead && !isRescuing) {
             setIsRescuing(true);
             setCurrentView('sleep');
-
             setTimeout(() => {
                 sendAction('heal');
                 setIsRescuing(false);
@@ -183,21 +219,68 @@ export default function App() {
         }
     }, [stats, isRescuing]);
 
-    useEffect(() => { localStorage.setItem('pet_th', theme); localStorage.setItem('pet_lng', language); localStorage.setItem('pet_cty', city); }, [theme, language, city]);
-    useEffect(() => { ANIMATIONS_LIST.forEach(anim => useGLTF.preload(`/models/${character}/${anim}.glb`)); }, [character]);
-    useEffect(() => { const timer = setTimeout(() => setIsGreeting(false), 5000); return () => clearTimeout(timer); }, []);
-    useEffect(() => { if (!isDevMode && currentView === 'dev') setCurrentView('home'); }, [isDevMode, currentView]);
+    useEffect(() => { 
+        localStorage.setItem('pet_th', theme); 
+        localStorage.setItem('pet_lng', language); 
+        localStorage.setItem('pet_cty', city); 
+    }, [theme, language, city]);
 
-    const fetchWeather = () => { const weathers = ['clr', 'rn', 'snw']; setWeather(weathers[Math.floor(Math.random() * 3)]); };
+    useEffect(() => { 
+        ANIMATIONS_LIST.forEach(anim => useGLTF.preload(`/models/${character}/${anim}.glb`)); 
+    }, [character]);
+
+    useEffect(() => { 
+        const timer = setTimeout(() => setIsGreeting(false), 5000); 
+        return () => clearTimeout(timer); 
+    }, []);
+
+    useEffect(() => { 
+        if (!isDevMode && currentView === 'dev') setCurrentView('home'); 
+    }, [isDevMode, currentView]);
+
+    // Эффект для туалета: при входе запускаем интервал + отправляем toilet_start, при выходе отправляем idle
+    useEffect(() => {
+        if (currentView === 'toilet') {
+            sendAction('toilet_start'); // устанавливаем состояние "toilet" на сервере
+            toiletInterval.current = setInterval(() => {
+                setStats(prev => {
+                    const newTl = Math.min(100, (prev.tl || 50) + 10);
+                    sendAction('toilet_update', newTl.toString());
+                    return { ...prev, tl: newTl };
+                });
+            }, 1000);
+        } else {
+            if (toiletInterval.current) {
+                clearInterval(toiletInterval.current);
+                toiletInterval.current = null;
+            }
+            // При выходе из туалета возвращаем состояние в idle
+            if (currentView !== 'toilet' && currentView !== 'sleep' && currentView !== 'dev') {
+                sendAction('idle');
+            }
+        }
+        return () => {
+            if (toiletInterval.current) {
+                clearInterval(toiletInterval.current);
+                toiletInterval.current = null;
+            }
+        };
+    }, [currentView]);
+
+    const fetchWeather = () => { 
+        const weathers = ['clr', 'rn', 'snw']; 
+        setWeather(weathers[Math.floor(Math.random() * 3)]); 
+    };
 
     const handleGameSelect = (gameId) => {
         setBalance(prev => prev + 10);
+        sendAction('balance_add', '10');
         incrementQuestProgress(4);
         setIsGamesOpen(false);
     };
 
     const healPet = () => {
-        setStats({ hng: 100, eng: 100, md: 100 });
+        sendAction('heal');
         incrementQuestProgress(3);
     };
 
@@ -216,20 +299,24 @@ export default function App() {
     };
 
     const handleFollowLink = () => {
-        window.open('https://example.com', '_blank');
+        window.open('https://shrinkme.io/st?api=9c62bfbee88432d1980098a96d7f39f290b12a2f&url=google.com', '_blank');
         setBalance(prev => prev + 50);
+        sendAction('balance_add', '50');
         closeAdModal();
     };
 
     const handleBalanceClick = () => {
-        if (isDevMode) setBalance(prev => prev + 100);
-        else setIsShopOpen(true);
+        if (isDevMode) {
+            setBalance(prev => prev + 100);
+            sendAction('balance_add', '100');
+        } else setIsShopOpen(true);
     };
 
     const closeShop = () => setIsShopOpen(false);
 
     const handlePurchase = (amount) => {
         setBalance(prev => prev + amount);
+        sendAction('balance_add', amount.toString());
         incrementQuestProgress(5);
         setIsShopOpen(false);
     };
@@ -250,7 +337,11 @@ export default function App() {
         setClaimingQuestId(questId);
         setQuests(prev => prev.map(q => {
             if (q.id === questId && q.completed && !q.claimed) {
-                setBalance(b => b + q.reward);
+                setBalance(b => {
+                    const newBalance = b + q.reward;
+                    sendAction('balance_add', q.reward.toString());
+                    return newBalance;
+                });
                 return { ...q, claimed: true };
             }
             return q;
@@ -261,114 +352,24 @@ export default function App() {
     const handleFeed = () => incrementQuestProgress(1);
     const handlePet = () => incrementQuestProgress(2);
 
-    // Исправленные функции голосового ввода
-    const startRecording = async () => {
-        recordedChunksRef.current = [];
-        setAudioUrl(null);
-        setRecordedBlob(null);
-        setResponseText('');
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-            recorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    recordedChunksRef.current.push(event.data);
-                }
-            };
-            recorder.onstop = () => {
-                const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
-                const url = URL.createObjectURL(blob);
-                setAudioUrl(url);
-                setRecordedBlob(blob);
-                stream.getTracks().forEach(track => track.stop());
-            };
-            recorder.start();
-            setMediaRecorder(recorder);
-            setIsRecording(true);
-        } catch (err) {
-            console.error('Error accessing microphone:', err);
-            alert('Не удалось получить доступ к микрофону');
+    const handleOpenWardrobe = () => setIsWardrobeOpen(true);
+    const handleCloseWardrobe = () => setIsWardrobeOpen(false);
+
+    const handleSelectCharacter = (charId) => {
+        if (unlockedCharacters.includes(charId)) {
+            setCharacter(charId);
+            sendAction('set_char', charId);
+            setIsWardrobeOpen(false);
         }
     };
 
-    const stopRecording = () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-            setIsRecording(false);
-        }
+    const handleUnlockRequest = (charId) => {
+        setIsWheelOpen(true);
     };
 
-    const cancelRecording = () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        recordedChunksRef.current = [];
-        setAudioUrl(null);
-        setRecordedBlob(null);
-        setIsRecording(false);
-        setIsVoiceModalOpen(false);
-    };
-
-    const restartRecording = () => {
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.stop();
-        }
-        recordedChunksRef.current = [];
-        setAudioUrl(null);
-        setRecordedBlob(null);
-        startRecording();
-    };
-
-    const sendRecording = async () => {
-        if (!recordedBlob) return;
-        setIsSending(true);
-        setResponseText('');
-        setIsThinking(true);
-        setThinkingPhase(0);
-
-        thinkingInterval.current = setInterval(() => {
-            setThinkingPhase(prev => (prev + 1) % 2);
-        }, 5000);
-
-        const formData = new FormData();
-        formData.append('file', recordedBlob, 'voice.webm');
-
-        try {
-            const res = await fetch('http://localhost:8000/api/voice/process', {
-                method: 'POST',
-                body: formData,
-            });
-            const data = await res.json();
-            if (res.ok) {
-                setResponseText(data.answer);
-                setBubbleText(data.answer);
-                setShowBubble(true);
-                if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
-                bubbleTimer.current = setTimeout(() => {
-                    setShowBubble(false);
-                    setBubbleText('');
-                }, 10000);
-            } else {
-                alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Ошибка соединения с сервером. Убедитесь, что сервер запущен на http://localhost:8000');
-        } finally {
-            setIsSending(false);
-            setIsThinking(false);
-            clearInterval(thinkingInterval.current);
-            setIsVoiceModalOpen(false);
-            recordedChunksRef.current = [];
-            setAudioUrl(null);
-            setRecordedBlob(null);
-        }
-    };
-
-    const closeBubble = () => {
-        setShowBubble(false);
-        setBubbleText('');
-        if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    const handleWheelWin = (amount) => {
+        setBalance(prev => prev + amount);
+        sendAction('balance_add', amount.toString());
     };
 
     return (
@@ -376,20 +377,28 @@ export default function App() {
             <LoadingScreen l={l} />
             <WeatherOverlay weather={weather} />
 
-            {/* РЕНДЕР КОМНАТ */}
             {currentView === 'home' && <HomeView character={character} stats={stats} setStats={setStats} sendAction={sendAction} isGreeting={isGreeting} onFeed={handleFeed} />}
             {currentView === 'play' && <PlayView character={character} stats={stats} setStats={setStats} sendAction={sendAction} isGreeting={isGreeting} onPet={handlePet} />}
             {currentView === 'sleep' && <SleepView character={character} stats={stats} setStats={setStats} sendAction={sendAction} />}
+            {currentView === 'toilet' && <ToiletView character={character} stats={stats} setStats={setStats} sendAction={sendAction} />}
             {currentView === 'wardrobe' && <WardrobeView character={character} />}
             {currentView === 'dev' && isDevMode && <DevView character={character} />}
             
             {/* Вертикальный ряд иконок слева сверху */}
             <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button onClick={() => setIsSettingsOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚙️</button>
+                
+                {/* Иконка рулетки с бейджем PLAY */}
                 <div style={{ position: 'relative' }}>
-                    <button onClick={() => {}} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🥽</button>
-                    <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ff4757', color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 6px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>NEW</span>
+                    <button onClick={() => setIsWheelOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎰</button>
+                    <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ff4757', color: 'white', fontSize: '10px', fontWeight: 'bold', padding: '3px 6px', borderRadius: '12px', boxShadow: '0 2px 5px rgba(0,0,0,0.2)' }}>PLAY</span>
                 </div>
+
+                {/* Иконка гардероба */}
+                <div style={{ position: 'relative' }}>
+                    <button onClick={handleOpenWardrobe} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👕</button>
+                </div>
+
                 <button onClick={() => setIsGamesOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎮</button>
                 <button onClick={() => setIsQuestsOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>📋</button>
             </div>
@@ -398,113 +407,6 @@ export default function App() {
             <div style={{ position: 'absolute', bottom: '20%', right: '20px', zIndex: 100 }}>
                 <button onClick={() => setIsVoiceModalOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', padding: '10px', borderRadius: '50%', cursor: 'pointer', boxShadow: colors.shadow, width: '50px', height: '50px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>🎤</button>
             </div>
-
-            {/* Модалка записи голоса */}
-            {isVoiceModalOpen && (
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ background: colors.modalBg, backdropFilter: 'blur(20px)', border: `1px solid ${colors.border}`, boxShadow: colors.shadow, padding: '25px', borderRadius: '25px', width: '85%', maxWidth: '400px', color: colors.text }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h2 style={{ margin: 0 }}>{l.voiceModalTitle}</h2>
-                            <button onClick={cancelRecording} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer' }}>✖</button>
-                        </div>
-                        {!audioUrl ? (
-                            <div style={{ textAlign: 'center' }}>
-                                {isRecording ? (
-                                    <div>
-                                        <p style={{ color: '#ff6b6b', fontWeight: 'bold' }}>{l.recording}</p>
-                                        <button onClick={stopRecording} style={{ margin: '10px', padding: '10px 20px', background: '#ff6b6b', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.stopRecord}</button>
-                                    </div>
-                                ) : (
-                                    <button onClick={startRecording} style={{ padding: '10px 20px', background: '#8ac6d1', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.startRecord}</button>
-                                )}
-                            </div>
-                        ) : (
-                            <div>
-                                <audio controls src={audioUrl} style={{ width: '100%', marginBottom: '15px' }} />
-                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-                                    <button onClick={sendRecording} disabled={isSending} style={{ padding: '10px 20px', background: '#4caf50', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.send}</button>
-                                    <button onClick={restartRecording} style={{ padding: '10px 20px', background: '#ffaa00', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.restart}</button>
-                                    <button onClick={cancelRecording} style={{ padding: '10px 20px', background: '#aaa', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.cancel}</button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* Облачко с ответом питомца */}
-            {(isThinking || showBubble) && (
-                <div style={{
-                    position: 'absolute',
-                    bottom: '20%',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    maxWidth: '300px',
-                    background: 'white',
-                    color: '#333',
-                    padding: '15px 20px',
-                    borderRadius: '30px',
-                    borderBottomLeftRadius: '5px',
-                    boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
-                    zIndex: 1500,
-                    animation: 'bubbleAppear 0.3s ease-out',
-                    pointerEvents: 'auto'
-                }}>
-                    {/* Крестик для закрытия (показываем только когда есть текст) */}
-                    {!isThinking && (
-                        <button 
-                            onClick={closeBubble}
-                            style={{
-                                position: 'absolute',
-                                top: '5px',
-                                right: '5px',
-                                background: 'transparent',
-                                border: 'none',
-                                fontSize: '16px',
-                                cursor: 'pointer',
-                                color: '#999',
-                                padding: '0',
-                                width: '20px',
-                                height: '20px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                        >
-                            ✖
-                        </button>
-                    )}
-                    
-                    {isThinking ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontStyle: 'italic' }}>
-                                {thinkingPhase === 0 ? l.thinking : l.reasoning}
-                            </span>
-                            <span className="dot-flashing"></span>
-                        </div>
-                    ) : (
-                        <>
-                            <p style={{ margin: 0 }}>{bubbleText}</p>
-                            {bubbleText.length > 150 && (
-                                <button onClick={() => setShowFullResponse(true)} style={{ background: 'none', border: 'none', color: '#8ac6d1', cursor: 'pointer', marginTop: '8px', fontWeight: 'bold' }}>{l.viewFull}</button>
-                            )}
-                        </>
-                    )}
-                </div>
-            )}
-
-            {/* Модалка полного ответа */}
-            {showFullResponse && (
-                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <div style={{ background: colors.modalBg, backdropFilter: 'blur(20px)', border: `1px solid ${colors.border}`, boxShadow: colors.shadow, padding: '25px', borderRadius: '25px', width: '85%', maxWidth: '500px', color: colors.text }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                            <h2>{l.voiceModalTitle}</h2>
-                            <button onClick={() => setShowFullResponse(false)} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer' }}>✖</button>
-                        </div>
-                        <p style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>{bubbleText}</p>
-                    </div>
-                </div>
-            )}
 
             {/* Модалка настроек */}
             {isSettingsOpen && (
@@ -762,18 +664,147 @@ export default function App() {
                 </div>
             )}
 
+            {/* Модалка записи голоса */}
+            {isVoiceModalOpen && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', zIndex: 1100, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ background: colors.modalBg, backdropFilter: 'blur(20px)', border: `1px solid ${colors.border}`, boxShadow: colors.shadow, padding: '25px', borderRadius: '25px', width: '85%', maxWidth: '400px', color: colors.text }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <h2 style={{ margin: 0 }}>{l.voiceModalTitle}</h2>
+                            <button onClick={cancelRecording} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer' }}>✖</button>
+                        </div>
+                        {!audioUrl ? (
+                            <div style={{ textAlign: 'center' }}>
+                                {isRecording ? (
+                                    <div>
+                                        <p style={{ color: '#ff6b6b', fontWeight: 'bold' }}>{l.recording}</p>
+                                        <button onClick={stopRecording} style={{ margin: '10px', padding: '10px 20px', background: '#ff6b6b', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.stopRecord}</button>
+                                    </div>
+                                ) : (
+                                    <button onClick={startRecording} style={{ padding: '10px 20px', background: '#8ac6d1', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.startRecord}</button>
+                                )}
+                            </div>
+                        ) : (
+                            <div>
+                                <audio controls src={audioUrl} style={{ width: '100%', marginBottom: '15px' }} />
+                                <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                                    <button onClick={sendRecording} disabled={isSending} style={{ padding: '10px 20px', background: '#4caf50', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.send}</button>
+                                    <button onClick={restartRecording} style={{ padding: '10px 20px', background: '#ffaa00', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.restart}</button>
+                                    <button onClick={cancelRecording} style={{ padding: '10px 20px', background: '#aaa', border: 'none', borderRadius: '20px', color: 'white', cursor: 'pointer' }}>{l.cancel}</button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Облачко с ответом питомца */}
+            {(isThinking || showBubble) && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '20%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    maxWidth: '300px',
+                    background: 'white',
+                    color: '#333',
+                    padding: '15px 20px',
+                    borderRadius: '30px',
+                    borderBottomLeftRadius: '5px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+                    zIndex: 1500,
+                    animation: 'bubbleAppear 0.3s ease-out',
+                    pointerEvents: 'auto'
+                }}>
+                    {!isThinking && (
+                        <button 
+                            onClick={closeBubble}
+                            style={{
+                                position: 'absolute',
+                                top: '5px',
+                                right: '5px',
+                                background: 'transparent',
+                                border: 'none',
+                                fontSize: '16px',
+                                cursor: 'pointer',
+                                color: '#999',
+                                padding: '0',
+                                width: '20px',
+                                height: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            ✖
+                        </button>
+                    )}
+                    
+                    {isThinking ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontStyle: 'italic' }}>
+                                {thinkingPhase === 0 ? l.thinking : l.reasoning}
+                            </span>
+                            <span className="dot-flashing"></span>
+                        </div>
+                    ) : (
+                        <>
+                            <p style={{ margin: 0 }}>{bubbleText}</p>
+                            {bubbleText.length > 150 && (
+                                <button onClick={() => setShowFullResponse(true)} style={{ background: 'none', border: 'none', color: '#8ac6d1', cursor: 'pointer', marginTop: '8px', fontWeight: 'bold' }}>{l.viewFull}</button>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Модалка полного ответа */}
+            {showFullResponse && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ background: colors.modalBg, backdropFilter: 'blur(20px)', border: `1px solid ${colors.border}`, boxShadow: colors.shadow, padding: '25px', borderRadius: '25px', width: '85%', maxWidth: '500px', color: colors.text }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h2>{l.voiceModalTitle}</h2>
+                            <button onClick={() => setShowFullResponse(false)} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>{bubbleText}</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Модалка гардероба */}
+            <WardrobeModal
+                isOpen={isWardrobeOpen}
+                onClose={handleCloseWardrobe}
+                unlockedCharacters={unlockedCharacters}
+                currentCharacter={character}
+                onSelect={handleSelectCharacter}
+                onUnlockRequest={handleUnlockRequest}
+                l={l}
+                colors={colors}
+            />
+
+            {/* Модалка колеса фортуны */}
+            <WheelOfFortune
+                isOpen={isWheelOpen}
+                onClose={() => setIsWheelOpen(false)}
+                balance={balance}
+                setBalance={setBalance}
+                spinCost={25}
+                onWin={handleWheelWin}
+                colors={colors}
+                l={l}
+            />
+
             {/* Нижняя панель с основными кнопками */}
             <div style={{ position: 'absolute', bottom: '2%', left: '5%', right: '5%', display: 'flex', justifyContent: 'space-around', background: colors.glassBg, border: `1px solid ${colors.border}`, padding: '15px', borderRadius: '30px', zIndex: 100, backdropFilter: 'blur(15px)', WebkitBackdropFilter: 'blur(15px)', boxShadow: colors.shadow, transition: 'all 0.3s ease' }}>
                 <NavButton icon="🏠" label={l.home} isActive={currentView === 'home'} onClick={() => setCurrentView('home')} colors={colors} />
                 <NavButton icon="🎾" label={l.play} isActive={currentView === 'play'} onClick={() => setCurrentView('play')} colors={colors} />
                 <NavButton icon="🌙" label={l.sleep} isActive={currentView === 'sleep'} onClick={() => setCurrentView('sleep')} colors={colors} />
-                <NavButton icon="👕" label={l.wardrobe} isActive={currentView === 'wardrobe'} onClick={() => setCurrentView('wardrobe')} colors={colors} />
+                <NavButton icon="🚽" label={l.toilet} isActive={currentView === 'toilet'} onClick={() => setCurrentView('toilet')} colors={colors} />
                 {isDevMode && <NavButton icon="🛠" label="Dev" isActive={currentView === 'dev'} onClick={() => setCurrentView('dev')} colors={colors} />}
             </div>
 
             {/* Панель статистики и баланса */}
             <div style={{ position: 'absolute', top: '20px', right: '20px', background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, color: colors.text, padding: '15px', borderRadius: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '8px', boxShadow: colors.shadow }}>
-
                 {isDevMode && <div style={{ fontSize: '11px', textAlign: 'center', color: '#ff7675', marginBottom: '5px', textTransform: 'uppercase', fontWeight: 'bold' }}>🛠 Dev: Клик для -20%<br />Баланс +100</div>}
 
                 <div 
@@ -797,6 +828,7 @@ export default function App() {
                 <StatBar icon="🍖" value={Math.round(stats.hng)} color="#ff6b6b" onClick={() => sendAction('dev_minus_hng')} isInteractive={isDevMode} />
                 <StatBar icon="⚡" value={Math.round(stats.eng)} color="#feca57" onClick={() => sendAction('dev_minus_eng')} isInteractive={isDevMode} />
                 <StatBar icon="💖" value={Math.round(stats.md)} color="#ff9ff3" onClick={() => sendAction('dev_minus_md')} isInteractive={isDevMode} />
+                <StatBar icon="🚽" value={Math.round(stats.tl)} color="#1e90ff" onClick={() => sendAction('dev_minus_tl')} isInteractive={isDevMode} />
 
                 {isDevMode && (
                     <button onClick={() => sendAction('heal')} style={{marginTop: '10px', background: '#2ecc71', border: 'none', color: 'white', padding: '8px', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold'}}>{l.heal}</button>
@@ -812,7 +844,7 @@ export default function App() {
                 )}
             </div>
 
-            {/* Оверлей спасения при истощении */}
+            {/* Оверлей спасения */}
             {isRescuing && (
                 <div style={{ 
                     position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', 
@@ -822,16 +854,9 @@ export default function App() {
                     justifyContent: 'center', alignItems: 'center', color: 'white',
                     animation: 'fadeIn 0.5s ease-out'
                 }}>
-                    <div style={{ fontSize: '60px', marginBottom: '20px', animation: 'float 2s ease-in-out infinite' }}>
-                        🌙
-                    </div>
-                    <h2 style={{ textAlign: 'center', margin: '0 20px', color: '#a29bfe' }}>
-                        Питомец полностью истощен...
-                    </h2>
-                    <p style={{ color: '#dfe6e9', marginTop: '10px' }}>
-                        Отправляем в глубокий сон для восстановления сил
-                    </p>
-                    
+                    <div style={{ fontSize: '60px', marginBottom: '20px', animation: 'float 2s ease-in-out infinite' }}>🌙</div>
+                    <h2 style={{ textAlign: 'center', margin: '0 20px', color: '#a29bfe' }}>Питомец полностью истощен...</h2>
+                    <p style={{ color: '#dfe6e9', marginTop: '10px' }}>Отправляем в глубокий сон для восстановления сил</p>
                     <div style={{ width: '60%', height: '10px', background: 'rgba(255,255,255,0.1)', borderRadius: '5px', marginTop: '30px', overflow: 'hidden' }}>
                         <div style={{ width: '100%', height: '100%', background: '#a29bfe', animation: 'fillBar 3s linear' }} />
                     </div>
@@ -892,7 +917,6 @@ export default function App() {
     );
 }
 
-// ВСПОМОГАТЕЛЬНЫЕ КОМПОНЕНТЫ UI
 function NavButton({ icon, label, isActive, onClick, colors }) {
     return (
         <button onClick={onClick} style={{ background: isActive ? colors.border : 'transparent', border: 'none', color: colors.text, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', padding: '8px 15px', borderRadius: '15px', cursor: 'pointer', transition: 'all 0.3s ease' }}>
