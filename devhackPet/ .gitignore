@@ -10,9 +10,10 @@ backend/main
 *.db
 *.db-shm
 *.db-wal
+pets.db
+*.db
 *.sqlite
 *.sqlite3
-pets.db
 node_modules/
 /frontend/node_modules/
 dist/
