@@ -26,7 +26,7 @@ function Takoyaki({ style, onPointerDown, onPointerMove, onPointerUp }) {
     );
 }
 
-export default function HomeView({ character = 'twilight', stats, setStats, sendAction, isGreeting }) {
+export default function HomeView({ character = 'twilight', stats, setStats, sendAction, isGreeting, onFeed }) {
     const [action, setAction] = useState('idle');
     const [isDragging, setIsDragging] = useState(false);
     const [foodPos, setFoodPos] = useState({ x: 0, y: 0 });
@@ -60,6 +60,9 @@ export default function HomeView({ character = 'twilight', stats, setStats, send
             setAction('eat');
             setStats(prev => ({ ...prev, hng: Math.min(100, prev.hng + 25), eng: Math.max(0, prev.eng - 5) }));
             sendAction('fd');
+
+            // Вызываем коллбэк для задания
+            if (onFeed) onFeed();
 
             setTimeout(() => setAction('idle'), 2500);
         }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Room3D from '../components/Room3D';
 
-export default function PlayView({ character = 'twilight', stats, setStats, sendAction, isGreeting }) {
+export default function PlayView({ character = 'twilight', stats, setStats, sendAction, isGreeting, onPet }) {
     const [action, setAction] = useState('idle');
 
     let criticalCount = 0;
@@ -20,6 +20,9 @@ export default function PlayView({ character = 'twilight', stats, setStats, send
             setAction('joy_jump');
             setStats(prev => ({ ...prev, md: Math.min(100, prev.md + 15), eng: Math.max(0, prev.eng - 5) }));
             sendAction('pl');
+
+            // Вызываем коллбэк для задания
+            if (onPet) onPet();
 
             setTimeout(() => setAction('idle'), 2000);
         }
