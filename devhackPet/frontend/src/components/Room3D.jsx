@@ -32,7 +32,7 @@ export default function Room3D({ url, position, rotation, scale, posY = -3.0, lo
                     <ContactShadows position={[0, -3.0, 0]} opacity={0.4} scale={5} blur={2} />
                 )}
                 
-                <OrbitControls target={[0, 0, 0]} enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 2.5} maxPolarAngle={Math.PI / 2} />
+                <OrbitControls enableRotate={false} target={[0, 0, 0]} enableZoom={false} enablePan={false} minPolarAngle={Math.PI / 2.5} maxPolarAngle={Math.PI / 2} />
             </Canvas>
         </div>
     );

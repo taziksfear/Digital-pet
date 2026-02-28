@@ -1,288 +1,155 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function WheelOfFortune({ isOpen, onClose, balance, setBalance, spinCost = 25, onWin, colors, l }) {
-    const SECTORS_COUNT = 10;
-    const SECTOR_COLORS = [
-        "hsl(197, 30%, 43%)",
-        "hsl(173, 58%, 39%)",
-        "hsl(43, 74%, 66%)",
-        "hsl(27, 87%, 67%)",
-        "hsl(12, 76%, 61%)",
-        "hsl(350, 60%, 52%)",
-        "hsl(91, 43%, 54%)"
-    ];
+const PRIZES = [
+    { id: 'rick', type: 'char', name: 'Рик', color: '#bdc3c7', icon: '👨‍🔬', chance: 30 },
+    { id: 'twilight', type: 'char', name: 'Искорка', color: '#9b59b6', icon: '🦄', chance: 20 },
+    { id: 'coin_50', type: 'coin', amount: 50, name: '50 Монет', color: '#f1c40f', icon: '🪙', chance: 35 },
+    { id: 'coin_200', type: 'coin', amount: 200, name: '200 Монет', color: '#2ecc71', icon: '💎', chance: 15 },
+];
 
-    const [prizes, setPrizes] = useState([]);
-    const [gradientStyle, setGradientStyle] = useState('');
+export default function WheelOfFortune({ isOpen, onClose, balance, setBalance, sendAction, unlockedCharacters, onUnlock, colors }) {
+    const SPIN_COST = 200;
+    const ITEM_WIDTH = 130; // 120px ширина блока + 10px отступ (gap)
+    
     const [isSpinning, setIsSpinning] = useState(false);
-    const [rotation, setRotation] = useState(0);
-    const [targetPrizeIndex, setTargetPrizeIndex] = useState(-1);
-    const [currentWin, setCurrentWin] = useState(0);
-    const [showModal, setShowModal] = useState(false);
-
-    const wheelRef = useRef(null);
-    const spinnerRef = useRef(null);
+    const [strip, setStrip] = useState([]);
+    const [result, setResult] = useState(null);
+    const [isDuplicate, setIsDuplicate] = useState(false);
+    const [offset, setOffset] = useState(0); // Наш новый надежный якорь для анимации
 
     useEffect(() => {
-        const newPrizes = [];
-        for (let i = 0; i < SECTORS_COUNT; i++) {
-            newPrizes.push({
-                text: "???",
-                color: SECTOR_COLORS[i % SECTOR_COLORS.length],
-                probability: 1 / SECTORS_COUNT
-            });
+        if (isOpen) {
+            setStrip(Array.from({ length: 10 }, () => PRIZES[Math.floor(Math.random() * PRIZES.length)]));
+            setResult(null);
+            setOffset(0); // Сбрасываем позицию
+            setIsDuplicate(false);
         }
-        setPrizes(newPrizes);
-    }, []);
+    }, [isOpen]);
 
-    useEffect(() => {
-        if (prizes.length === 0) return;
-        const gradientParts = prizes.map(({ color }, i) => {
-            const percent = (100 / prizes.length) * (prizes.length - i);
-            return `${color} 0 ${percent}%`;
-        }).reverse().join(', ');
-        setGradientStyle(`conic-gradient(from -90deg, ${gradientParts})`);
-    }, [prizes]);
-
-    useEffect(() => {
-        if (!spinnerRef.current || prizes.length === 0) return;
-        const prizeSlice = 360 / SECTORS_COUNT;
-        const prizeOffset = Math.floor(180 / SECTORS_COUNT);
-        spinnerRef.current.innerHTML = '';
-        prizes.forEach(({ text }, i) => {
-            const rotation = ((prizeSlice * i) * -1) - prizeOffset;
-            const div = document.createElement('div');
-            div.className = 'prize';
-            div.style.setProperty('--rotate', `${rotation}deg`);
-            // Добавляем инлайновый стиль для черного текста
-            div.innerHTML = `<div class="text" style="color: black; font-weight: bold;">${text}</div>`;
-            spinnerRef.current.appendChild(div);
-        });
-    }, [prizes]);
-
-    const getRandomPrizeIndex = () => Math.floor(Math.random() * SECTORS_COUNT);
+    const getWinPrize = () => {
+        const roll = Math.random() * 100;
+        let currentSum = 0;
+        for (const p of PRIZES) {
+            currentSum += p.chance;
+            if (roll <= currentSum) return p;
+        }
+        return PRIZES[0];
+    };
 
     const handleSpin = () => {
-        if (isSpinning || balance < spinCost) return;
-        setIsSpinning(true);
-        setBalance(prev => prev - spinCost);
-        setShowModal(false);
+        if (balance < SPIN_COST || isSpinning) return;
 
-        const prizeNodes = spinnerRef.current?.querySelectorAll('.prize');
-        prizeNodes?.forEach(node => node.classList.remove('selected'));
+        setBalance(prev => prev - SPIN_COST);
+        sendAction('balance_add', `-${SPIN_COST}`);
+        
+        setIsSpinning(false); // Выключаем анимацию для сброса
+        setResult(null);
+        setIsDuplicate(false);
+        setOffset(0); // Моментально возвращаем ленту в начало
 
-        const targetIdx = getRandomPrizeIndex();
-        setTargetPrizeIndex(targetIdx);
-
-        const prizeSlice = 360 / SECTORS_COUNT;
-        const targetRotation = targetIdx * prizeSlice + prizeSlice / 2;
-        const newRotation = 360 * 8 + targetRotation;
-        setRotation(newRotation);
-    };
-
-    const handleTransitionEnd = () => {
-        if (!isSpinning) return;
-        const winAmount = Math.floor(Math.random() * 10) + 1;
-        setCurrentWin(winAmount);
-
-        const prizeNodes = spinnerRef.current?.querySelectorAll('.prize');
-        if (prizeNodes && targetPrizeIndex >= 0) {
-            prizeNodes[targetPrizeIndex]?.classList.add('selected');
+        const win = getWinPrize();
+        
+        const newStrip = [];
+        for (let i = 0; i < 40; i++) {
+            newStrip.push(PRIZES[Math.floor(Math.random() * PRIZES.length)]);
         }
+        newStrip.push(win); // Победный предмет будет ровно 40-м индексом
+        newStrip.push(PRIZES[Math.floor(Math.random() * PRIZES.length)]);
+        newStrip.push(PRIZES[Math.floor(Math.random() * PRIZES.length)]);
 
-        setTimeout(() => setShowModal(true), 500);
+        setStrip(newStrip);
 
-        setRotation(prev => prev % 360);
-        setIsSpinning(false);
-        setTargetPrizeIndex(-1);
-    };
+        // Даем React миллисекунду на отрисовку ленты, затем запускаем полет
+        setTimeout(() => {
+            setIsSpinning(true);
+            setOffset(40 * ITEM_WIDTH); // Двигаем ленту ровно до 40-го элемента
+        }, 50);
 
-    const handleGetPrize = () => {
-        if (currentWin > 0) {
-            setBalance(prev => prev + currentWin);
-            if (onWin) onWin(currentWin);
-            setCurrentWin(0);
-            setShowModal(false);
-        }
+        // Ждем 4 секунды пока рулетка крутится
+        setTimeout(() => {
+            setIsSpinning(false);
+            setResult(win);
+            
+            if (win.type === 'char') {
+                if (unlockedCharacters.includes(win.id)) {
+                    setIsDuplicate(true);
+                    setBalance(prev => prev + 150);
+                    sendAction('balance_add', '150');
+                } else {
+                    onUnlock(win.id);
+                }
+            } else if (win.type === 'coin') {
+                setBalance(prev => prev + win.amount);
+                sendAction('balance_add', win.amount.toString());
+            }
+        }, 4050); 
     };
 
     if (!isOpen) return null;
 
     return (
-        <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            background: 'rgba(0,0,0,0.4)',
-            zIndex: 2000,
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center'
-        }}>
-            <div style={{
-                background: colors.modalBg,
-                backdropFilter: 'blur(20px)',
-                border: `1px solid ${colors.border}`,
-                boxShadow: colors.shadow,
-                padding: '25px',
-                borderRadius: '25px',
-                width: '90%',
-                maxWidth: '600px',
-                color: colors.text,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-            }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', marginBottom: '20px' }}>
-                    <h2 style={{ margin: 0 }}>{l.wheel || 'Колесо фортуны'}</h2>
-                    <button onClick={onClose} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer' }}>✖</button>
-                </div>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.8)', zIndex: 1200, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
+            
+            <button onClick={onClose} disabled={isSpinning} style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: '2px solid white', color: 'white', borderRadius: '50%', width: '40px', height: '40px', fontSize: '20px', cursor: isSpinning ? 'not-allowed' : 'pointer' }}>✖</button>
 
-                <div className="deal-wheel" ref={wheelRef} style={{
-                    position: 'relative',
-                    display: 'grid',
-                    gridGap: 'calc(500px / 20)',
-                    alignItems: 'center',
-                    gridTemplateAreas: '"spinner" "trigger"',
-                    fontSize: 'calc(500px / 21)',
-                    margin: '0 auto',
-                    width: '100%',
-                    maxWidth: '500px'
+            <div style={{ position: 'absolute', top: '20px', left: '20px', background: 'rgba(0,0,0,0.6)', padding: '10px 20px', borderRadius: '20px', fontSize: '20px', fontWeight: 'bold', border: '2px solid #f1c40f', color: '#f1c40f' }}>
+                💰 {balance}
+            </div>
+
+            <h1 style={{ color: 'white', textTransform: 'uppercase', letterSpacing: '2px', textShadow: '0 0 20px rgba(255,255,255,0.5)', marginBottom: '30px' }}>
+                Поиск Персонажа
+            </h1>
+
+            <div style={{ width: '90%', maxWidth: '500px', height: '140px', background: '#2c3e50', borderRadius: '20px', border: '4px solid #34495e', overflow: 'hidden', position: 'relative', boxShadow: '0 15px 30px rgba(0,0,0,0.8)' }}>
+                
+                <div style={{ position: 'absolute', top: 0, left: '50%', width: '4px', height: '100%', background: '#e74c3c', zIndex: 10, transform: 'translateX(-50%)', boxShadow: '0 0 15px #e74c3c' }} />
+                
+                {/* --- НОВАЯ ЖЕЛЕЗОБЕТОННАЯ АНИМАЦИЯ --- */}
+                <div style={{ 
+                    display: 'flex', height: '100%', alignItems: 'center', gap: '10px', 
+                    paddingLeft: 'calc(50% - 60px)', // Идеально центрует нулевой элемент
+                    transform: `translateX(-${offset}px)`,
+                    transition: isSpinning ? 'transform 4s cubic-bezier(0.1, 0.8, 0.1, 1)' : 'none'
                 }}>
-                    <div
-                        ref={spinnerRef}
-                        className="spinner"
-                        style={{
-                            position: 'relative',
-                            display: 'grid',
-                            alignItems: 'center',
-                            gridTemplateAreas: '"spinner"',
-                            width: '100%',
-                            aspectRatio: '1/1',
-                            transform: `rotate(${rotation}deg)`,
-                            borderRadius: '50%',
-                            boxShadow: '0 10px 30px rgba(0,0,0,0.2)',
-                            transition: isSpinning ? 'transform 3.5s cubic-bezier(0.1, 0.2, 0.35, 1)' : 'none',
-                            background: gradientStyle,
-                        }}
-                        onTransitionEnd={handleTransitionEnd}
-                    />
-
-                    <div className="ticker" style={{
-                        position: 'relative',
-                        left: 'calc(500px / -15)',
-                        width: 'calc(500px / 10)',
-                        height: 'calc(500px / 20)',
-                        background: 'linear-gradient(hsl(0 3% 0%) 0 50%, hsl(0 3% 20%) 50% 100%)',
-                        zIndex: 1,
-                        clipPath: 'polygon(20% 0, 100% 50%, 20% 100%, 0% 50%)',
-                        transformOrigin: 'center left',
-                        gridArea: 'spinner',
-                        justifySelf: 'center',
-                        alignSelf: 'center',
-                        animation: isSpinning ? 'tick 700ms cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
-                    }} />
-
-                    <button
-                        className="btn-spin"
-                        onClick={handleSpin}
-                        disabled={isSpinning || balance < spinCost}
-                        style={{
-                            gridArea: 'trigger',
-                            justifySelf: 'center',
-                            color: 'white',
-                            background: balance < spinCost ? '#666' : '#000',
-                            border: 'none',
-                            fontSize: 'inherit',
-                            padding: '1rem 2.5rem',
-                            borderRadius: '8px',
-                            cursor: balance < spinCost ? 'not-allowed' : 'pointer',
-                            fontWeight: 600,
-                            transition: 'all 0.3s',
-                            marginTop: '20px'
-                        }}
-                    >
-                        {balance < spinCost ? 'Недостаточно средств' : `Крутить за ${spinCost}₽`}
-                    </button>
-                </div>
-
-                {showModal && (
-                    <div style={{
-                        position: 'fixed',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        background: 'rgba(0,0,0,0.8)',
-                        zIndex: 2100,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                    }}>
-                        <div style={{
-                            background: 'white',
-                            padding: '40px',
-                            borderRadius: '20px',
-                            textAlign: 'center',
-                            maxWidth: '400px',
-                            width: '90%',
-                            boxShadow: '0 25px 50px rgba(0,0,0,0.3)'
+                    {strip.map((item, index) => (
+                        <div key={index} style={{ 
+                            minWidth: '120px', height: '120px', background: 'linear-gradient(135deg, #34495e, #2c3e50)', 
+                            borderRadius: '15px', border: `2px solid ${item.color}`, display: 'flex', flexDirection: 'column', 
+                            justifyContent: 'center', alignItems: 'center', boxShadow: `inset 0 0 20px ${item.color}30` 
                         }}>
-                            <h2 style={{ color: '#2ecc71', fontSize: '32px', marginBottom: '20px' }}>🎉 Поздравляем!</h2>
-                            <p style={{ fontSize: '24px', marginBottom: '30px', color: '#333' }}>Вы выиграли:</p>
-                            <div style={{ fontSize: '48px', fontWeight: 'bold', color: '#f1c40f', margin: '20px 0' }}>
-                                {currentWin}₽
-                            </div>
-                            <button
-                                onClick={handleGetPrize}
-                                style={{
-                                    background: '#2ecc71',
-                                    color: 'white',
-                                    border: 'none',
-                                    padding: '15px 40px',
-                                    fontSize: '20px',
-                                    borderRadius: '50px',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    transition: 'all 0.3s'
-                                }}
-                            >
-                                Получить!
-                            </button>
+                            <div style={{ fontSize: '50px' }}>{item.icon}</div>
                         </div>
+                    ))}
+                </div>
+            </div>
+
+            <button 
+                onClick={handleSpin} disabled={isSpinning || balance < SPIN_COST}
+                style={{
+                    marginTop: '40px', padding: '15px 50px', fontSize: '22px', fontWeight: 'bold', textTransform: 'uppercase',
+                    background: isSpinning ? '#7f8c8d' : (balance >= SPIN_COST ? 'linear-gradient(180deg, #9b59b6 0%, #8e44ad 100%)' : '#7f8c8d'),
+                    color: 'white', border: '4px solid rgba(255,255,255,0.2)', borderRadius: '40px',
+                    cursor: (isSpinning || balance < SPIN_COST) ? 'not-allowed' : 'pointer',
+                    boxShadow: isSpinning ? 'none' : '0 10px 20px rgba(142, 68, 173, 0.5)',
+                    transform: isSpinning ? 'scale(0.95)' : 'scale(1)', transition: 'all 0.2s ease'
+                }}
+            >
+                {isSpinning ? 'Открываем...' : `Открыть (${SPIN_COST} 💰)`}
+            </button>
+
+            <div style={{ height: '100px', marginTop: '20px', display: 'flex', alignItems: 'center' }}>
+                {result && !isSpinning && (
+                    <div style={{ animation: 'popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275)', textAlign: 'center', background: 'rgba(0,0,0,0.6)', padding: '15px 40px', borderRadius: '20px', border: `2px solid ${result.color}` }}>
+                        <div style={{ fontSize: '30px', fontWeight: 'bold', color: result.color, textShadow: `0 0 15px ${result.color}80` }}>
+                            {result.icon} {result.name}
+                        </div>
+                        {isDuplicate && <div style={{ color: '#f1c40f', marginTop: '5px', fontWeight: 'bold' }}>Уже есть! Компенсация: +150 💰</div>}
+                        {result.type === 'char' && !isDuplicate && <div style={{ color: '#2ecc71', marginTop: '5px', fontWeight: 'bold' }}>НОВЫЙ ПЕРСОНАЖ!</div>}
                     </div>
                 )}
-
-                <style>{`
-                    .prize {
-                        display: flex;
-                        align-items: center;
-                        padding: 0 calc(500px / 6) 0 calc(500px / 20);
-                        width: 50%;
-                        height: 50%;
-                        transform-origin: center right;
-                        transform: rotate(var(--rotate));
-                        user-select: none;
-                        grid-area: spinner;
-                    }
-                    .prize.selected .text {
-                        color: white !important;
-                        animation: selected 800ms ease;
-                    }
-                    @keyframes selected {
-                        25% { transform: scale(1.25); text-shadow: 1vmin 1vmin 0 hsla(0 0% 0% / 0.1); }
-                        40% { transform: scale(0.92); text-shadow: 0 0 0 hsla(0 0% 0% / 0.2); }
-                        60% { transform: scale(1.02); text-shadow: 0.5vmin 0.5vmin 0 hsla(0 0% 0% / 0.1); }
-                        75% { transform: scale(0.98); }
-                        85% { transform: scale(1); }
-                    }
-                    @keyframes tick {
-                        40% { transform: rotate(-12deg); }
-                    }
-                `}</style>
             </div>
+
+            <style>{`@keyframes popIn { 0% { transform: scale(0.5) translateY(20px); opacity: 0; } 100% { transform: scale(1) translateY(0); opacity: 1; } }`}</style>
         </div>
     );
 }

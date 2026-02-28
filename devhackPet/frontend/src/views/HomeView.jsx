@@ -69,9 +69,11 @@ export default function HomeView({ character = 'twilight', stats, setStats, send
         setFoodPos({ x: 0, y: 0 }); 
     };
 
+    const scaleMult = character === 'rick' ? 0.2 : 1;
+
     return (
         <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', backgroundImage: 'url(/images/kitchen_bg.png)', backgroundSize: 'cover', backgroundPosition: 'center' }}>
-            <Room3D url={`/models/${character}/${currentAnim}.glb`} posY={-2.5} scale={2.2} loop={currentAnim !== 'fall' && currentAnim !== 'hello'} />
+            <Room3D url={`/models/${character}/${currentAnim}.glb`} posY={-2.5} scale={2.2 * scaleMult} loop={currentAnim !== 'fall' && currentAnim !== 'hello'} />
             <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', height: '25%', display: 'flex', flexDirection: 'column', pointerEvents: 'none', zIndex: 10 }}>
                 <div style={{ width: '100%', height: '40px', background: 'linear-gradient(180deg, #deab7a 0%, #c48b53 100%)', borderTop: '4px solid #f2c79b', borderBottom: '8px solid #8c5828' }} />
                 <div style={{ width: '100%', height: '20px', background: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 100%)' }} />

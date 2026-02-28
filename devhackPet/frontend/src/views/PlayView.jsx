@@ -28,6 +28,8 @@ export default function PlayView({ character = 'twilight', stats, setStats, send
         }
     };
 
+    const scaleMult = character === 'rick' ? 0.2 : 1;
+
     return (
         <div style={{ 
             width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden',
@@ -37,7 +39,7 @@ export default function PlayView({ character = 'twilight', stats, setStats, send
             <Room3D 
                 url={`/models/${character}/${currentAnim}.glb`} 
                 posY={-3.0} 
-                scale={2.2} 
+                scale={2.2 * scaleMult} 
                 loop={currentAnim !== 'fall' && currentAnim !== 'hello'} 
                 onInteract={handleInteract} 
             />

@@ -5,12 +5,13 @@ const ALL_ANIMATIONS = ['idle', 'sleep', 'joy_jump', 'hello', 'fall', 'sick', 'e
 
 export default function DevView({ character = 'twilight' }) {
     const [activeAnim, setActiveAnim] = useState('idle');
-
+    const scaleMult = character === 'rick' ? 0.2 : 1;
     return (
         <div style={{ width: '100%', height: '100vh', background: '#261738', position: 'relative' }}>
             <Room3D 
                 url={`/models/${character}/${activeAnim}.glb`} 
                 posY={-3.0} 
+                scale={2.2 * scaleMult}
                 loop={activeAnim !== 'fall' && activeAnim !== 'hello'} 
             />
 

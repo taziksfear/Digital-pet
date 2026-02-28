@@ -13,16 +13,17 @@ import (
 )
 
 type PSt struct {
-	Hng     float64 `json:"hng"`
-	Eng     float64 `json:"eng"`
-	Md      float64 `json:"md"`
-	Tl      float64 `json:"tl"`      // туалет
-	Balance int     `json:"balance"` // монеты
-	St      string  `json:"st"`
-	Char    string  `json:"char"`
-	Nm      string  `json:"nm"`
-	Cstm    string  `json:"cstm"`
-	Tut     int     `json:"tut"`
+	Hng      float64 `json:"hng"`
+	Eng      float64 `json:"eng"`
+	Md       float64 `json:"md"`
+	Tl       float64 `json:"tl"`      
+	Balance  int     `json:"balance"` 
+	St       string  `json:"st"`
+	Char     string  `json:"char"`
+	Nm       string  `json:"nm"`
+	Cstm     string  `json:"cstm"`
+	Tut      int     `json:"tut"`
+	Unlocked string  `json:"unlocked"` // <-- НОВОЕ ПОЛЕ
 }
 
 type ActReq struct {
@@ -46,7 +47,8 @@ func initDB() {
 	q := `CREATE TABLE IF NOT EXISTS pts (
 		uId TEXT PRIMARY KEY, 
 		hng REAL, eng REAL, md REAL, tl REAL, balance INTEGER,
-		st TEXT, char TEXT, nm TEXT, cstm TEXT, tut INTEGER
+		st TEXT, char TEXT, nm TEXT, cstm TEXT, tut INTEGER,
+		unlocked TEXT
 	);`
 	_, err = db.Exec(q)
 	if err != nil {
@@ -56,24 +58,25 @@ func initDB() {
 
 func getPetData(uId string) *PSt {
 	p := &PSt{}
-	r := db.QueryRow("SELECT hng, eng, md, tl, balance, st, char, nm, cstm, tut FROM pts WHERE uId = ?", uId)
-	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.Tl, &p.Balance, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut)
+	r := db.QueryRow("SELECT hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked FROM pts WHERE uId = ?", uId)
+	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.Tl, &p.Balance, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut, &p.Unlocked)
 
 	if err == sql.ErrNoRows {
 		p = &PSt{
-			Hng:     50,
-			Eng:     80,
-			Md:      60,
-			Tl:      50,
-			Balance: 1000,
-			St:      "brd",
-			Char:    "pig",
-			Nm:      "",
-			Cstm:    "none",
-			Tut:     1,
+			Hng:      50,
+			Eng:      80,
+			Md:       60,
+			Tl:       50,
+			Balance:  1000,
+			St:       "brd",
+			Char:     "twilight", // Искорка дефолт
+			Nm:       "",
+			Cstm:     "none",
+			Tut:      1,
+			Unlocked: `["twilight"]`, // Дефолтный массив
 		}
-		db.Exec("INSERT INTO pts (uId, hng, eng, md, tl, balance, st, char, nm, cstm, tut) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uId, p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut)
+		db.Exec("INSERT INTO pts (uId, hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uId, p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked)
 	}
 	return p
 }
@@ -123,7 +126,7 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 	case "idle":
 		p.St = "idle"
 	case "heal":
-		p.Hng, p.Eng, p.Md, p.Tl = 100, 100, 100, 100 // восстановление туалета
+		p.Hng, p.Eng, p.Md, p.Tl = 100, 100, 100, 100 
 		p.St = "idle"
 	case "dev_minus_hng":
 		p.Hng = max(0, p.Hng-20)
@@ -145,6 +148,8 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 		if _, err := fmt.Sscanf(rq.PLd, "%d", &add); err == nil {
 			p.Balance += add
 		}
+	case "unlock_char":
+		p.Unlocked = rq.PLd // <-- Обрабатываем получение массива
 	case "set_nm":
 		p.Nm = rq.PLd
 	case "set_char":
@@ -157,8 +162,8 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 		p.Tut = 0
 	}
 
-	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=?, balance=?, st=?, char=?, nm=?, cstm=?, tut=? WHERE uId=?",
-		p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, rq.UId)
+	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=?, balance=?, st=?, char=?, nm=?, cstm=?, tut=?, unlocked=? WHERE uId=?",
+		p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked, rq.UId)
 	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -202,7 +207,6 @@ func wrk() {
 				d.hng = max(0, d.hng-1)
 				d.md = max(0, d.md-0.5)
 			}
-			// tl уменьшается со временем, если не в туалете
 			if d.st != "toilet" {
 				d.tl = max(0, d.tl-0.2)
 			}
