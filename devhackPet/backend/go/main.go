@@ -237,8 +237,13 @@ func max(a, b float64) float64 {
 func main() {
 	initDB()
 	go wrk()
+
+	fs := http.FileServer(http.Dir("../../frontend/dist"))
+	http.Handle("/", fs)
+
 	http.HandleFunc("/api/pet", cors(hGet))
 	http.HandleFunc("/api/act", cors(hAct))
+
 	log.Println("SQLite Бэкенд запущен: 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
