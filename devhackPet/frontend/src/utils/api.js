@@ -1,4 +1,5 @@
-const API_URL = '/api';
+// utils/api.js
+const API_URL = import.meta.env.VITE_GO_API_URL || '/api';
 
 const getUserId = () => {
     const tgId = window.Telegram?.WebApp?.initDataUnsafe?.user?.id;
@@ -6,7 +7,7 @@ const getUserId = () => {
 
     let localId = localStorage.getItem('local_user_id');
     if (!localId) {
-        localId = 'web_' + Math.random().toString(36).substr(2, 9); // например: web_x8f9q2
+        localId = 'web_' + Math.random().toString(36).substr(2, 9);
         localStorage.setItem('local_user_id', localId);
     }
     return localId;

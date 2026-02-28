@@ -14,9 +14,11 @@ import { LoadingScreen, WeatherOverlay, NavButton, StatBar } from './components/
 import { SettingsModal, ShopModal, GamesModal, QuestsModal, VoiceModal } from './components/AppModals';
 import { loc, initialQuests, ANIMATIONS_LIST } from './config';
 import './index.css';
-import Tutirial from './components/Tutorial';
 
 export default function App() {
+    const API_BASE = import.meta.env.VITE_GO_API_URL || '';
+    const PYTHON_API_BASE = import.meta.env.VITE_PYTHON_API_URL || '';
+
     const [currentView, setCurrentView] = useState('home');
     const [character, setCharacter] = useState('twilight');
     const [isGreeting, setIsGreeting] = useState(true);
@@ -33,7 +35,7 @@ export default function App() {
     const [isDevMode, setIsDevMode] = useState(false);
     const [theme, setTheme] = useState(localStorage.getItem('pet_th') || 'drk'); 
     const [language, setLanguage] = useState(localStorage.getItem('pet_lng') || 'ru'); 
-    const [city, setCity] = useState(localStorage.getItem('pet_cty') || 'Moscow');
+    const [city, setCity] = useState(localStorage.getItem('pet_cty') || '');
     const [weather, setWeather] = useState('clr'); 
     const [isRescuing, setIsRescuing] = useState(false);
 
@@ -46,6 +48,11 @@ export default function App() {
     const [isWheelOpen, setIsWheelOpen] = useState(false);
     const [unlockedCharacters, setUnlockedCharacters] = useState(['twilight']);
 
+    // Состояния для модалки рекламы (лечение)
+    const [isAdModalOpen, setIsAdModalOpen] = useState(false);
+    const [adTimerFinished, setAdTimerFinished] = useState(false);
+    const [adTimer, setAdTimer] = useState(null);
+
     useEffect(() => {
         if (tg) {
             tg.ready();
@@ -53,24 +60,42 @@ export default function App() {
         }
     }, [tg]);
 
+    // Голосовое общение и AI
     const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
+    const [mediaRecorder, setMediaRecorder] = useState(null);
     const [audioUrl, setAudioUrl] = useState(null);
+    const [recordedBlob, setRecordedBlob] = useState(null);
     const [isSending, setIsSending] = useState(false);
+    const [responseText, setResponseText] = useState('');
+    const [isThinking, setIsThinking] = useState(false);
+    const [thinkingPhase, setThinkingPhase] = useState(0);
+    const [showFullResponse, setShowFullResponse] = useState(false);
+    const thinkingInterval = useRef(null);
+
+    const [showBubble, setShowBubble] = useState(false);
+    const [bubbleText, setBubbleText] = useState('');
+    const bubbleTimer = useRef(null);
+
+    const recordedChunksRef = useRef([]);
 
     const toiletInterval = useRef(null);
     const isDark = theme === 'drk';
     const l = loc[language];
 
     const colors = {
-        text: isDark ? '#ffffff' : '#2c3e50', glassBg: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)',
-        modalBg: isDark ? 'rgba(30, 30, 30, 0.5)' : 'rgba(255, 255, 255, 0.6)', border: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
-        shadow: isDark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(31, 38, 135, 0.15)', textShadow: isDark ? '0 1px 3px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
+        text: isDark ? '#ffffff' : '#2c3e50',
+        glassBg: isDark ? 'rgba(0, 0, 0, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+        modalBg: isDark ? 'rgba(30, 30, 30, 0.5)' : 'rgba(255, 255, 255, 0.6)',
+        border: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.6)',
+        shadow: isDark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(31, 38, 135, 0.15)',
+        textShadow: isDark ? '0 1px 3px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
     };
 
     const sendAction = (actionName, payload = "") => {
-        fetch('/api/act', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+        fetch(`${API_BASE}/api/act`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ uId: PLAYER_ID, act: actionName, pLd: payload })
         })
         .then(res => res.json())
@@ -88,74 +113,216 @@ export default function App() {
                     catch (e) { console.error("Ошибка парсинга", e); }
                 }
             }
-        }).catch(err => console.log("Бэкенд недоступен"));
+        }).catch(err => console.log("Бэкенд недоступен", err));
     };
 
     useEffect(() => {
         const fetchStats = () => {
-            fetch(`/api/pet?uId=${PLAYER_ID}`).then(res => res.json())
+            fetch(`${API_BASE}/api/pet?uId=${PLAYER_ID}`).then(res => res.json())
             .then(data => { 
-            if (data) {
-                setStats({ hng: data.hng, eng: data.eng, md: data.md, tl: data.tl !== undefined ? data.tl : 50 });
-                if (data.balance !== undefined) setBalance(data.balance);
-                if (data.wth) setWeather(data.wth);
-                
-                if (data.tut === 1) setShowTutorial(true);
-                else setShowTutorial(false);
-                if (data.nm) setPetName(data.nm);
+                if (data) {
+                    setStats({ hng: data.hng, eng: data.eng, md: data.md, tl: data.tl !== undefined ? data.tl : 50 });
+                    if (data.balance !== undefined) setBalance(data.balance);
+                    if (data.wth) setWeather(data.wth);
+                    
+                    if (data.tut === 1) setShowTutorial(true);
+                    else setShowTutorial(false);
+                    if (data.nm) setPetName(data.nm);
 
-                if (data.unlocked) {
-                    try { setUnlockedCharacters(JSON.parse(data.unlocked)); } 
-                    catch (e) { console.error("Ошибка парсинга", e); }
+                    if (data.unlocked) {
+                        try { setUnlockedCharacters(JSON.parse(data.unlocked)); } 
+                        catch (e) { console.error("Ошибка парсинга", e); }
+                    }
                 }
-            }
-        }).catch(err => console.log("Бэкенд недоступен"));
+            }).catch(err => console.log("Бэкенд недоступен", err));
         };
         fetchStats();
         const syncLoop = setInterval(fetchStats, 3000);
         return () => clearInterval(syncLoop);
-        
     }, []);
 
-    useEffect(() => {
-        localStorage.setItem('pet_unlocked', JSON.stringify(unlockedCharacters));
-    }, [unlockedCharacters]);
+    // Функция получения реальной погоды по координатам
+    const fetchRealWeather = async (lat, lon) => {
+        try {
+            const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+            const data = await response.json();
+            if (data.current_weather) {
+                const code = data.current_weather.weathercode;
+                let wth = 'clr';
+                if (code >= 51 && code <= 67) wth = 'rn';
+                else if (code >= 71 && code <= 77) wth = 'snw';
+                else if (code >= 80 && code <= 99) wth = 'rn';
 
-    useEffect(() => {
-        if (currentView === 'toilet') {
-            sendAction('toilet_start');
-            toiletInterval.current = setInterval(() => {
-                setStats(prev => {
-                    const newTl = Math.min(100, (prev.tl || 50) + 10);
-                    sendAction('toilet_update', newTl.toString());
-                    return { ...prev, tl: newTl };
-                });
-            }, 1000);
+                setWeather(wth);
+                sendAction('set_wth', wth);
+                console.log(`Погода обновлена: ${wth} (код ${code})`);
+            }
+        } catch (err) {
+            console.error('Ошибка получения погоды:', err);
+        }
+    };
+
+    const detectLocation = () => {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    fetchRealWeather(latitude, longitude);
+                },
+                (error) => {
+                    console.warn('Геолокация недоступна, используем определение по IP');
+                    fetch('https://ipapi.co/json/')
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.latitude && data.longitude) {
+                                fetchRealWeather(data.latitude, data.longitude);
+                            }
+                        })
+                        .catch(err => console.error('Ошибка определения по IP:', err));
+                }
+            );
         } else {
-            if (toiletInterval.current) clearInterval(toiletInterval.current);
-            if (currentView !== 'toilet' && currentView !== 'sleep' && currentView !== 'dev' && currentView !== 'slots') sendAction('idle');
+            fetch('https://ipapi.co/json/')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.latitude && data.longitude) {
+                        fetchRealWeather(data.latitude, data.longitude);
+                    }
+                })
+                .catch(err => console.error('Ошибка определения по IP:', err));
         }
-        return () => clearInterval(toiletInterval.current);
-    }, [currentView]);
+    };
 
     useEffect(() => {
-        const isDead = Math.floor(stats.hng) <= 0 && Math.floor(stats.eng) <= 0 && Math.floor(stats.md) <= 0;
-        if (isDead && !isRescuing) {
-            setIsRescuing(true); setCurrentView('sleep');
-            setTimeout(() => { sendAction('heal'); setIsRescuing(false); }, 3000);
+        if (!isDevMode) {
+            detectLocation();
+        } else {
+            if (!city) setCity('Moscow');
+            fetchWeatherDev();
         }
-    }, [stats, isRescuing]);
+    }, [isDevMode]);
 
-    useEffect(() => { localStorage.setItem('pet_th', theme); localStorage.setItem('pet_lng', language); localStorage.setItem('pet_cty', city); }, [theme, language, city]);
-    useEffect(() => { ANIMATIONS_LIST.forEach(anim => useGLTF.preload(`/models/${character}/${anim}.glb`)); }, [character]);
-    useEffect(() => { const timer = setTimeout(() => setIsGreeting(false), 5000); return () => clearTimeout(timer); }, []);
+    useEffect(() => {
+        if (!isDevMode && city && city !== localStorage.getItem('pet_cty')) {
+            fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(city)}&count=1`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.results && data.results.length > 0) {
+                        const { latitude, longitude } = data.results[0];
+                        fetchRealWeather(latitude, longitude);
+                    }
+                })
+                .catch(err => console.error('Ошибка геокодирования:', err));
+        }
+    }, [city, isDevMode]);
 
-    const fetchWeather = () => {
+    const fetchWeatherDev = () => {
         const weathers = ['clr', 'rn', 'snw'];
         const newWth = weathers[Math.floor(Math.random() * 3)];
         setWeather(newWth);
         sendAction('set_wth', newWth);
     };
+
+    const fetchWeather = () => {
+        if (isDevMode) fetchWeatherDev();
+        else detectLocation();
+    };
+
+    // --- Функция для генерации AI фразы по тексту (для событий) ---
+    const generateAIPhrase = async (prompt, context = "") => {
+        try {
+            const petStatsDesc = `Голод: ${Math.round(stats.hng)}%, Энергия: ${Math.round(stats.eng)}%, Настроение: ${Math.round(stats.md)}%, Туалет: ${Math.round(stats.tl)}%`;
+            const response = await fetch(`${PYTHON_API_BASE}/api/ai/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    pet_name: petName,
+                    pet_character: character,
+                    pet_stats: petStatsDesc,
+                    weather: weather,
+                    context: context
+                })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                return data.answer;
+            } else {
+                console.error("AI generation error:", data);
+                return null;
+            }
+        } catch (err) {
+            console.error("Error generating AI phrase:", err);
+            return null;
+        }
+    };
+
+    // --- Автоматические реплики на события ---
+    const lastEventRef = useRef({});
+    const showAIBubble = async (text) => {
+        setBubbleText(text);
+        setShowBubble(true);
+        if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+        bubbleTimer.current = setTimeout(() => {
+            setShowBubble(false);
+            setBubbleText('');
+        }, 10000);
+    };
+
+    useEffect(() => {
+        const checkEvents = async () => {
+            if (stats.hng < 20 && !lastEventRef.current.hungry) {
+                lastEventRef.current.hungry = true;
+                const phrase = await generateAIPhrase("Я очень голоден! Покорми меня.", "Ты хочешь есть, сообщи об этом хозяину.");
+                if (phrase) showAIBubble(phrase);
+            } else if (stats.hng >= 20) {
+                lastEventRef.current.hungry = false;
+            }
+
+            if (stats.eng < 20 && !lastEventRef.current.tired) {
+                lastEventRef.current.tired = true;
+                const phrase = await generateAIPhrase("Я устал, хочу спать.", "Ты хочешь спать, сообщи хозяину.");
+                if (phrase) showAIBubble(phrase);
+            } else if (stats.eng >= 20) {
+                lastEventRef.current.tired = false;
+            }
+
+            if (stats.md < 20 && !lastEventRef.current.sad) {
+                lastEventRef.current.sad = true;
+                const phrase = await generateAIPhrase("Мне грустно, поиграй со мной.", "Тебе грустно, попроси поиграть.");
+                if (phrase) showAIBubble(phrase);
+            } else if (stats.md >= 20) {
+                lastEventRef.current.sad = false;
+            }
+
+            if (stats.tl > 80 && !lastEventRef.current.toilet) {
+                lastEventRef.current.toilet = true;
+                const phrase = await generateAIPhrase("Мне нужно в туалет!", "Тебе нужно в туалет, сообщи хозяину.");
+                if (phrase) showAIBubble(phrase);
+            } else if (stats.tl <= 80) {
+                lastEventRef.current.toilet = false;
+            }
+        };
+        checkEvents();
+    }, [stats]);
+
+    const handleViewChange = async (view) => {
+        setCurrentView(view);
+        if (view === 'sleep') {
+            const phrase = await generateAIPhrase("Я иду спать. Спокойной ночи!", "Ты идёшь спать, пожелай спокойной ночи.");
+            if (phrase) showAIBubble(phrase);
+        } else if (view === 'play') {
+            const phrase = await generateAIPhrase("Ура, играть!", "Ты рад играть, вырази радость.");
+            if (phrase) showAIBubble(phrase);
+        } else if (view === 'home') {
+            const phrase = await generateAIPhrase("Я вернулся домой.", "Ты вернулся домой, скажи что-нибудь приятное.");
+            if (phrase) showAIBubble(phrase);
+        } else if (view === 'toilet') {
+            const phrase = await generateAIPhrase("Мне нужно в туалет.", "Ты идёшь в туалет, скажи что-нибудь.");
+            if (phrase) showAIBubble(phrase);
+        }
+    };
+
     const handleGameSelect = () => { setBalance(p => p + 10); sendAction('balance_add', '10'); incrementQuestProgress(4); setIsGamesOpen(false); };
     const handlePurchase = (amount) => { setBalance(p => p + amount); sendAction('balance_add', amount.toString()); incrementQuestProgress(5); setIsShopOpen(false); };
     const incrementQuestProgress = (id) => setQuests(prev => prev.map(q => (q.id === id && !q.completed && !q.claimed) ? { ...q, progress: Math.min(q.progress + 1, q.target), completed: Math.min(q.progress + 1, q.target) >= q.target } : q));
@@ -168,11 +335,143 @@ export default function App() {
         setClaimingQuestId(null);
     };
 
-    const startRecording = () => setIsRecording(true);
-    const stopRecording = () => { setIsRecording(false); setAudioUrl('test'); };
-    const cancelRecording = () => { setIsVoiceModalOpen(false); setAudioUrl(null); setIsRecording(false); };
-    const restartRecording = () => setAudioUrl(null);
-    const sendRecording = () => { setIsSending(true); setTimeout(() => { setIsSending(false); cancelRecording(); }, 1000); };
+    // --- Функции для лечения через рекламу ---
+    const handleHealWithAd = () => {
+        setIsAdModalOpen(true);
+        setAdTimerFinished(false);
+        const timer = setTimeout(() => setAdTimerFinished(true), 15000);
+        setAdTimer(timer);
+    };
+
+    const closeAdModal = () => {
+        if (adTimer) clearTimeout(adTimer);
+        setIsAdModalOpen(false);
+        setAdTimerFinished(false);
+        sendAction('heal');
+        incrementQuestProgress(3);
+    };
+
+    const handleFollowLink = () => {
+        window.open('https://example.com', '_blank');
+        sendAction('balance_add', '50');
+        setBalance(prev => prev + 50);
+        closeAdModal();
+    };
+
+    // --- ГОЛОСОВЫЕ ФУНКЦИИ ---
+    const startRecording = async () => {
+        recordedChunksRef.current = [];
+        setAudioUrl(null);
+        setRecordedBlob(null);
+        setResponseText('');
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunksRef.current.push(event.data);
+                }
+            };
+            recorder.onstop = () => {
+                const blob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                setAudioUrl(url);
+                setRecordedBlob(blob);
+                stream.getTracks().forEach(track => track.stop());
+            };
+            recorder.start();
+            setMediaRecorder(recorder);
+            setIsRecording(true);
+        } catch (err) {
+            console.error('Error accessing microphone:', err);
+            alert('Не удалось получить доступ к микрофону');
+        }
+    };
+
+    const stopRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+            setIsRecording(false);
+        }
+    };
+
+    const cancelRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        recordedChunksRef.current = [];
+        setAudioUrl(null);
+        setRecordedBlob(null);
+        setIsRecording(false);
+        setIsVoiceModalOpen(false);
+    };
+
+    const restartRecording = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.stop();
+        }
+        recordedChunksRef.current = [];
+        setAudioUrl(null);
+        setRecordedBlob(null);
+        startRecording();
+    };
+
+    const sendRecording = async () => {
+        if (!recordedBlob) return;
+        setIsSending(true);
+        setResponseText('');
+        setIsThinking(true);
+        setThinkingPhase(0);
+
+        thinkingInterval.current = setInterval(() => {
+            setThinkingPhase(prev => (prev + 1) % 2);
+        }, 5000);
+
+        const formData = new FormData();
+        formData.append('file', recordedBlob, 'voice.webm');
+        const petStatsDesc = `Голод: ${Math.round(stats.hng)}%, Энергия: ${Math.round(stats.eng)}%, Настроение: ${Math.round(stats.md)}%, Туалет: ${Math.round(stats.tl)}%`;
+        formData.append('pet_name', petName);
+        formData.append('pet_character', character);
+        formData.append('pet_stats', petStatsDesc);
+        formData.append('weather', weather);
+
+        try {
+            const res = await fetch(`${PYTHON_API_BASE}/api/voice/process`, {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setResponseText(data.answer);
+                setBubbleText(data.answer);
+                setShowBubble(true);
+                if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+                bubbleTimer.current = setTimeout(() => {
+                    setShowBubble(false);
+                    setBubbleText('');
+                }, 10000);
+            } else {
+                alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Ошибка соединения с сервером. Убедитесь, что сервер запущен');
+        } finally {
+            setIsSending(false);
+            setIsThinking(false);
+            clearInterval(thinkingInterval.current);
+            setIsVoiceModalOpen(false);
+            recordedChunksRef.current = [];
+            setAudioUrl(null);
+            setRecordedBlob(null);
+        }
+    };
+
+    const closeBubble = () => {
+        setShowBubble(false);
+        setBubbleText('');
+        if (bubbleTimer.current) clearTimeout(bubbleTimer.current);
+    };
 
     return (
         <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
@@ -216,7 +515,12 @@ export default function App() {
                 <div onClick={() => isDevMode ? sendAction('balance_add', '100') : setIsShopOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, padding: '8px 15px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: colors.shadow, color: '#f1c40f', fontWeight: 'bold', fontSize: '16px' }}>
                     <span>💰</span><span>{balance}</span>
                 </div>
-                <button onClick={() => { sendAction('heal'); incrementQuestProgress(3); }} style={{ background: '#2ecc71', border: 'none', color: 'white', padding: '6px 15px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', boxShadow: colors.shadow }}>{l.heal}</button>
+                {!isDevMode && (
+                    <button onClick={handleHealWithAd} style={{ background: '#2ecc71', border: 'none', color: 'white', padding: '6px 15px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', boxShadow: colors.shadow }}>{l.heal}</button>
+                )}
+                {isDevMode && (
+                    <button onClick={() => sendAction('heal')} style={{ background: '#2ecc71', border: 'none', color: 'white', padding: '6px 15px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', boxShadow: colors.shadow }}>{l.heal}</button>
+                )}
             </div>
 
             <button onClick={() => setIsVoiceModalOpen(true)} style={{ position: 'absolute', bottom: '20%', right: '20px', zIndex: 100, background: colors.glassBg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', borderRadius: '50%', width: '50px', height: '50px', boxShadow: colors.shadow }}>🎤</button>
@@ -230,7 +534,93 @@ export default function App() {
             }} />}
             {isShopOpen && <ShopModal onClose={() => setIsShopOpen(false)} l={l} colors={colors} handlePurchase={handlePurchase} />}
             {isQuestsOpen && <QuestsModal onClose={() => setIsQuestsOpen(false)} l={l} colors={colors} quests={quests} claimQuestReward={claimQuestReward} claimingQuestId={claimingQuestId} />}
-            {isVoiceModalOpen && <VoiceModal onClose={cancelRecording} l={l} colors={colors} isRecording={isRecording} startRecording={startRecording} stopRecording={stopRecording} audioUrl={audioUrl} sendRecording={sendRecording} isSending={isSending} restartRecording={restartRecording} cancelRecording={cancelRecording} />}
+            {isVoiceModalOpen && (
+                <VoiceModal 
+                    onClose={cancelRecording} 
+                    l={l} colors={colors} 
+                    isRecording={isRecording} 
+                    startRecording={startRecording} 
+                    stopRecording={stopRecording} 
+                    audioUrl={audioUrl} 
+                    sendRecording={sendRecording} 
+                    isSending={isSending} 
+                    restartRecording={restartRecording} 
+                    cancelRecording={cancelRecording} 
+                />
+            )}
+
+            {/* Облачко с ответом питомца */}
+            {(isThinking || showBubble) && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '20%',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    maxWidth: '300px',
+                    background: 'white',
+                    color: '#333',
+                    padding: '15px 20px',
+                    borderRadius: '30px',
+                    borderBottomLeftRadius: '5px',
+                    boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+                    zIndex: 1500,
+                    animation: 'bubbleAppear 0.3s ease-out',
+                    pointerEvents: 'auto'
+                }}>
+                    {!isThinking && (
+                        <button 
+                            onClick={closeBubble}
+                            style={{
+                                position: 'absolute',
+                                top: '5px',
+                                right: '5px',
+                                background: 'transparent',
+                                border: 'none',
+                                fontSize: '16px',
+                                cursor: 'pointer',
+                                color: '#999',
+                                padding: 0,
+                                width: '20px',
+                                height: '20px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                        >
+                            ✖
+                        </button>
+                    )}
+                    
+                    {isThinking ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontStyle: 'italic' }}>
+                                {thinkingPhase === 0 ? l.thinking : l.reasoning}
+                            </span>
+                            <span className="dot-flashing"></span>
+                        </div>
+                    ) : (
+                        <>
+                            <p style={{ margin: 0 }}>{bubbleText}</p>
+                            {bubbleText.length > 150 && (
+                                <button onClick={() => setShowFullResponse(true)} style={{ background: 'none', border: 'none', color: '#8ac6d1', cursor: 'pointer', marginTop: '8px', fontWeight: 'bold' }}>{l.viewFull}</button>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
+            {/* Модалка полного ответа */}
+            {showFullResponse && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.4)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <div style={{ background: colors.modalBg, backdropFilter: 'blur(20px)', border: `1px solid ${colors.border}`, boxShadow: colors.shadow, padding: '25px', borderRadius: '25px', width: '85%', maxWidth: '500px', color: colors.text }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                            <h2>{l.voiceModalTitle}</h2>
+                            <button onClick={() => setShowFullResponse(false)} style={{ background: colors.border, border: 'none', fontSize: '18px', width: '30px', height: '30px', borderRadius: '50%', color: colors.text, cursor: 'pointer' }}>✖</button>
+                        </div>
+                        <p style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>{bubbleText}</p>
+                    </div>
+                </div>
+            )}
 
             {isGamesOpen && <GamesModal onClose={() => setIsGamesOpen(false)} l={l} colors={colors} handleGameSelect={handleGameSelect} openSlots={() => { setCurrentView('slots'); setIsGamesOpen(false); }} />}
 
@@ -247,11 +637,79 @@ export default function App() {
             }} colors={colors} l={l} 
             />
 
+            {/* Модалка рекламы для лечения */}
+            {isAdModalOpen && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.9)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column' }}>
+                    
+                    <div style={{ width: '80%', maxWidth: '600px', marginBottom: '20px' }}>
+                        <div style={{ width: '100%', height: '8px', background: '#555', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div 
+                                style={{ 
+                                    width: '100%', 
+                                    height: '100%', 
+                                    background: '#8ac6d1', 
+                                    animation: 'shrink 15s linear forwards' 
+                                }} 
+                            />
+                        </div>
+                    </div>
+
+                    <img 
+                        src="https://i.imgur.com/XhXK1pF.png" 
+                        alt="Ad" 
+                        style={{ maxWidth: '90%', maxHeight: '70%', borderRadius: '20px' }} 
+                    />
+                    
+                    {adTimerFinished && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '30px', width: '80%', maxWidth: '300px' }}>
+                            <button 
+                                onClick={handleFollowLink}
+                                style={{
+                                    background: '#ffaa00',
+                                    border: 'none',
+                                    color: 'white',
+                                    fontSize: '16px',
+                                    padding: '12px 20px',
+                                    borderRadius: '30px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                                    transition: 'transform 0.2s',
+                                }}
+                                onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
+                                onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                            >
+                                🔗 {l.followLink}
+                            </button>
+                            <button 
+                                onClick={closeAdModal}
+                                style={{
+                                    background: '#8ac6d1',
+                                    border: 'none',
+                                    color: 'white',
+                                    fontSize: '16px',
+                                    padding: '12px 20px',
+                                    borderRadius: '30px',
+                                    cursor: 'pointer',
+                                    fontWeight: 'bold',
+                                    boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                                    transition: 'transform 0.2s',
+                                }}
+                                onMouseEnter={(e) => e.target.style.transform = 'scale(1.02)'}
+                                onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
+                            >
+                                ✖ {l.closeAd}
+                            </button>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <div style={{ position: 'absolute', bottom: '2%', left: '5%', right: '5%', display: 'flex', justifyContent: 'space-around', background: colors.glassBg, border: `1px solid ${colors.border}`, padding: '15px', borderRadius: '30px', zIndex: 100, backdropFilter: 'blur(15px)', boxShadow: colors.shadow }}>
-                <NavButton icon="🏠" label={l.home} isActive={currentView === 'home'} onClick={() => setCurrentView('home')} colors={colors} />
-                <NavButton icon="🎾" label={l.play} isActive={currentView === 'play'} onClick={() => setCurrentView('play')} colors={colors} />
-                <NavButton icon="🌙" label={l.sleep} isActive={currentView === 'sleep'} onClick={() => setCurrentView('sleep')} colors={colors} />
-                <NavButton icon="🚽" label={l.toilet} isActive={currentView === 'toilet'} onClick={() => setCurrentView('toilet')} colors={colors} />
+                <NavButton icon="🏠" label={l.home} isActive={currentView === 'home'} onClick={() => handleViewChange('home')} colors={colors} />
+                <NavButton icon="🎾" label={l.play} isActive={currentView === 'play'} onClick={() => handleViewChange('play')} colors={colors} />
+                <NavButton icon="🌙" label={l.sleep} isActive={currentView === 'sleep'} onClick={() => handleViewChange('sleep')} colors={colors} />
+                <NavButton icon="🚽" label={l.toilet} isActive={currentView === 'toilet'} onClick={() => handleViewChange('toilet')} colors={colors} />
                 {isDevMode && <NavButton icon="🛠" label="Dev" isActive={currentView === 'dev'} onClick={() => setCurrentView('dev')} colors={colors} />}
             </div>
 
@@ -302,6 +760,52 @@ export default function App() {
                     </div>
                 </div>
             )}
+            <style>{`
+                @keyframes shrink {
+                    from { width: 100%; }
+                    to { width: 0%; }
+                }
+                @keyframes fall {
+                    0% { transform: translateY(-10vh) rotate(0deg); }
+                    100% { transform: translateY(110vh) rotate(360deg); }
+                }
+                @keyframes bubbleAppear {
+                    from { opacity: 0; transform: translateX(-50%) scale(0.8); }
+                    to { opacity: 1; transform: translateX(-50%) scale(1); }
+                }
+                .dot-flashing {
+                    position: relative;
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background-color: #333;
+                    animation: dot-flashing 1s infinite linear alternate;
+                    animation-delay: 0.5s;
+                }
+                .dot-flashing::before, .dot-flashing::after {
+                    content: '';
+                    display: inline-block;
+                    position: absolute;
+                    top: 0;
+                    width: 8px;
+                    height: 8px;
+                    border-radius: 50%;
+                    background-color: #333;
+                    animation: dot-flashing 1s infinite alternate;
+                }
+                .dot-flashing::before {
+                    left: -12px;
+                    animation-delay: 0s;
+                }
+                .dot-flashing::after {
+                    left: 12px;
+                    animation-delay: 1s;
+                }
+                @keyframes dot-flashing {
+                    0% { background-color: #333; }
+                    50%, 100% { background-color: rgba(51, 51, 51, 0.2); }
+                }
+            `}</style>
         </div>
     );
 }

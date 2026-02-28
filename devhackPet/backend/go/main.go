@@ -24,7 +24,7 @@ type PSt struct {
 	Cstm     string  `json:"cstm"`
 	Tut      int     `json:"tut"`
 	Unlocked string  `json:"unlocked"`
-	Wth      string  `json:"wth"`
+	Wth      string  `json:"wth"`      // погода: clr, rn, snw
 }
 
 type ActReq struct {
@@ -59,7 +59,7 @@ func initDB() {
 
 func getPetData(uId string) *PSt {
 	p := &PSt{}
-	r := db.QueryRow("SELECT hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked wth FROM pts WHERE uId = ?", uId)
+	r := db.QueryRow("SELECT hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked, wth FROM pts WHERE uId = ?", uId)
 	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.Tl, &p.Balance, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut, &p.Unlocked, &p.Wth)
 
 	if err == sql.ErrNoRows {
@@ -75,9 +75,9 @@ func getPetData(uId string) *PSt {
 			Cstm:     "none",
 			Tut:      1,
 			Unlocked: `["twilight"]`,
-			Wth: 	  "clr",
+			Wth:      "clr",
 		}
-		db.Exec("INSERT INTO pts (uId, hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked, wth) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+		db.Exec("INSERT INTO pts (uId, hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked, wth) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 			uId, p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked, p.Wth)
 	}
 	return p
@@ -116,11 +116,13 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 
 	switch rq.Act {
 	case "fd":
-		p.Hng = min(100, p.Hng+25)
+		// Увеличиваем сытость на 20% (не больше 100)
+		p.Hng = min(100, p.Hng+20)
 		p.Eng = max(0, p.Eng-5)
 		p.St = "idle"
 	case "pl":
-		p.Md = min(100, p.Md+30)
+		// Увеличиваем настроение на 20% (не больше 100)
+		p.Md = min(100, p.Md+20)
 		p.Eng = max(0, p.Eng-15)
 		p.St = "play"
 	case "slp":
@@ -166,7 +168,7 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 		p.Wth = rq.PLd
 	}
 
-	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=?, balance=?, st=?, char=?, nm=?, cstm=?, tut=?, unlocked=? wth=? WHERE uId=?",
+	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=?, balance=?, st=?, char=?, nm=?, cstm=?, tut=?, unlocked=?, wth=? WHERE uId=?",
 		p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked, p.Wth, rq.UId)
 	mu.Unlock()
 
@@ -174,6 +176,7 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(p)
 }
 
+// Воркер обновления статистики (каждую секунду)
 func wrk() {
 	tk := time.NewTicker(1 * time.Second)
 	for range tk.C {
@@ -182,38 +185,52 @@ func wrk() {
 		type uData struct {
 			id            string
 			hng, eng, md, tl float64
-			st            string
+			st, wth       string
 		}
 		var uds []uData
 
-		r, err := db.Query("SELECT uId, hng, eng, md, tl, st FROM pts")
+		r, err := db.Query("SELECT uId, hng, eng, md, tl, st, wth FROM pts")
 		if err == nil {
 			for r.Next() {
 				var d uData
-				r.Scan(&d.id, &d.hng, &d.eng, &d.md, &d.tl, &d.st)
+				r.Scan(&d.id, &d.hng, &d.eng, &d.md, &d.tl, &d.st, &d.wth)
 				uds = append(uds, d)
 			}
 			r.Close()
 		}
 
 		for _, d := range uds {
+			// Изменения в зависимости от состояния
 			switch d.st {
 			case "slp":
 				d.eng = min(100, d.eng+0.1)
-				d.hng = max(0, d.hng-0.5)
-				d.md = max(0, d.md-1)
+				d.hng = max(0, d.hng-0.2)  // медленное снижение голода
+				d.md  = max(0, d.md-0.2)   // медленное снижение настроения
 			case "play":
-				d.md = min(100, d.md+2)
+				d.md = min(100, d.md+2)    // игра поднимает настроение
 				d.eng = max(0, d.eng-2)
-				d.hng = max(0, d.hng-1)
+				d.hng = max(0, d.hng-0.2)  // медленное снижение голода
 			case "idle", "brd":
-				d.eng = max(0, d.eng-0.5)
-				d.hng = max(0, d.hng-1)
-				d.md = max(0, d.md-0.5)
+				// Все параметры медленно уменьшаются с одинаковой скоростью
+				d.hng = max(0, d.hng-0.2)
+				d.eng = max(0, d.eng-0.2)
+				d.md  = max(0, d.md-0.2)
 			}
+
+			// Уменьшение потребности в туалете (кроме состояния "toilet")
 			if d.st != "toilet" {
 				d.tl = max(0, d.tl-0.2)
 			}
+
+			// Влияние погоды на настроение (md)
+			switch d.wth {
+			case "rn": // дождь – настроение падает быстрее (дополнительно -0.25)
+				d.md = max(0, d.md-0.25)
+			case "snw": // снег – небольшое влияние
+				d.md = max(0, d.md-0.1)
+			// case "clr": без изменений
+			}
+
 			db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=? WHERE uId=?", d.hng, d.eng, d.md, d.tl, d.id)
 		}
 		mu.Unlock()
@@ -238,12 +255,9 @@ func main() {
 	initDB()
 	go wrk()
 
-	fs := http.FileServer(http.Dir("../../frontend/dist"))
-	http.Handle("/", fs)
-
 	http.HandleFunc("/api/pet", cors(hGet))
 	http.HandleFunc("/api/act", cors(hAct))
 
-	log.Println("SQLite Бэкенд запущен: 8080")
+	log.Println("SQLite Бэкенд запущен на порту 8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
