@@ -1,38 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 
-// Импорт комнат и мини-игр
 import HomeView from './views/HomeView';
 import PlayView from './views/PlayView';
 import SleepView from './views/SleepView';
 import ToiletView from './views/ToiletView';
 import WardrobeView from './views/WardrobeView';
 import DevView from './views/DevView';
-import SlotsView from './views/SlotsView'; // Денежные слоты
-
-// Импорт компонентов и модалок
-import WheelOfFortune from './components/WheelOfFortune'; // Рулетка персонажей
+import SlotsView from './views/SlotsView';
+import WheelOfFortune from './components/WheelOfFortune';
 import WardrobeModal from './components/WardrobeModal';
 import { LoadingScreen, WeatherOverlay, NavButton, StatBar } from './components/SharedUI';
 import { SettingsModal, ShopModal, GamesModal, QuestsModal, VoiceModal } from './components/AppModals';
-
-// Импорт настроек
 import { loc, initialQuests, ANIMATIONS_LIST } from './config';
 import './index.css';
 
 export default function App() {
-    // --- ОСНОВНЫЕ СОСТОЯНИЯ ---
     const [currentView, setCurrentView] = useState('home');
     const [character, setCharacter] = useState('twilight');
     const [isGreeting, setIsGreeting] = useState(true);
-    
-    // БАЗОВЫЕ СТАТЫ (Синхронизация с БД)
+
     const [stats, setStats] = useState({ hng: 100, eng: 100, md: 100, tl: 50 });
     const [balance, setBalance] = useState(1000); 
     const tg = window.Telegram?.WebApp;
     const PLAYER_ID = tg?.initDataUnsafe?.user?.id?.toString() || "test_user_1";
-    
-    // НАСТРОЙКИ UI
+
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isDevMode, setIsDevMode] = useState(false);
     const [theme, setTheme] = useState(localStorage.getItem('pet_th') || 'drk'); 
@@ -41,7 +33,6 @@ export default function App() {
     const [weather, setWeather] = useState('clr'); 
     const [isRescuing, setIsRescuing] = useState(false);
 
-    // СОСТОЯНИЯ ВСПЛЫВАЮЩИХ ОКОН
     const [isGamesOpen, setIsGamesOpen] = useState(false);
     const [isShopOpen, setIsShopOpen] = useState(false);
     const [isQuestsOpen, setIsQuestsOpen] = useState(false);
@@ -58,7 +49,6 @@ export default function App() {
         }
     }, [tg]);
 
-    // ГОЛОС
     const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
     const [isRecording, setIsRecording] = useState(false);
     const [audioUrl, setAudioUrl] = useState(null);
@@ -74,7 +64,6 @@ export default function App() {
         shadow: isDark ? '0 8px 32px rgba(0,0,0,0.5)' : '0 8px 32px rgba(31, 38, 135, 0.15)', textShadow: isDark ? '0 1px 3px rgba(0,0,0,0.8)' : '0 1px 2px rgba(255,255,255,0.8)'
     };
 
-    // --- СИНХРОНИЗАЦИЯ С GO БЭКЕНДОМ ---
     const sendAction = (actionName, payload = "") => {
         fetch('/api/act', {
             method: 'POST', headers: { 'Content-Type': 'application/json' }, 
@@ -84,7 +73,10 @@ export default function App() {
         .then(data => { 
             if (data) {
                 setStats({ hng: data.hng, eng: data.eng, md: data.md, tl: data.tl !== undefined ? data.tl : 50 });
-                if (data.balance !== undefined) setBalance(data.balance);
+                    if (data.balance !== undefined) setBalance(data.balance);
+                    if (data.unlocked);
+
+                    if (data.wth) setWeather(data.wth);
             }
         }).catch(err => console.log("Бэкенд недоступен"));
     };
@@ -111,12 +103,10 @@ export default function App() {
         
     }, []);
 
-    // Сохранение разблокированных персонажей локально
     useEffect(() => {
         localStorage.setItem('pet_unlocked', JSON.stringify(unlockedCharacters));
     }, [unlockedCharacters]);
 
-    // --- ЛОГИКА ТУАЛЕТА ---
     useEffect(() => {
         if (currentView === 'toilet') {
             sendAction('toilet_start');
@@ -134,7 +124,6 @@ export default function App() {
         return () => clearInterval(toiletInterval.current);
     }, [currentView]);
 
-    // --- ЛОГИКА ЭКСТРЕННОГО СНА ---
     useEffect(() => {
         const isDead = Math.floor(stats.hng) <= 0 && Math.floor(stats.eng) <= 0 && Math.floor(stats.md) <= 0;
         if (isDead && !isRescuing) {
@@ -143,13 +132,16 @@ export default function App() {
         }
     }, [stats, isRescuing]);
 
-    // --- ОБЩИЕ ЭФФЕКТЫ ---
     useEffect(() => { localStorage.setItem('pet_th', theme); localStorage.setItem('pet_lng', language); localStorage.setItem('pet_cty', city); }, [theme, language, city]);
     useEffect(() => { ANIMATIONS_LIST.forEach(anim => useGLTF.preload(`/models/${character}/${anim}.glb`)); }, [character]);
     useEffect(() => { const timer = setTimeout(() => setIsGreeting(false), 5000); return () => clearTimeout(timer); }, []);
 
-    // --- ОБРАБОТЧИКИ ---
-    const fetchWeather = () => setWeather(['clr', 'rn', 'snw'][Math.floor(Math.random() * 3)]);
+    const fetchWeather = () => {
+        const weathers = ['clr', 'rn', 'snw'];
+        const newWth = weathers[Math.floor(Math.random() * 3)];
+        setWeather(newWth);
+        sendAction('set_wth', newWth);
+    };
     const handleGameSelect = () => { setBalance(p => p + 10); sendAction('balance_add', '10'); incrementQuestProgress(4); setIsGamesOpen(false); };
     const handlePurchase = (amount) => { setBalance(p => p + amount); sendAction('balance_add', amount.toString()); incrementQuestProgress(5); setIsShopOpen(false); };
     const incrementQuestProgress = (id) => setQuests(prev => prev.map(q => (q.id === id && !q.completed && !q.claimed) ? { ...q, progress: Math.min(q.progress + 1, q.target), completed: Math.min(q.progress + 1, q.target) >= q.target } : q));
@@ -162,7 +154,6 @@ export default function App() {
         setClaimingQuestId(null);
     };
 
-    // Заглушки для микрофона
     const startRecording = () => setIsRecording(true);
     const stopRecording = () => { setIsRecording(false); setAudioUrl('test'); };
     const cancelRecording = () => { setIsVoiceModalOpen(false); setAudioUrl(null); setIsRecording(false); };
@@ -174,7 +165,6 @@ export default function App() {
             <LoadingScreen l={l} />
             <WeatherOverlay weather={weather} />
 
-            {/* --- КОМНАТЫ И ИГРЫ --- */}
             {currentView === 'home' && <HomeView character={character} stats={stats} setStats={setStats} sendAction={sendAction} isGreeting={isGreeting} onFeed={() => incrementQuestProgress(1)} />}
             {currentView === 'play' && <PlayView character={character} stats={stats} setStats={setStats} sendAction={sendAction} isGreeting={isGreeting} onPet={() => incrementQuestProgress(2)} />}
             {currentView === 'sleep' && <SleepView character={character} stats={stats} setStats={setStats} sendAction={sendAction} />}
@@ -182,8 +172,7 @@ export default function App() {
             {currentView === 'wardrobe' && <WardrobeView character={character} />}
             {currentView === 'slots' && <SlotsView balance={balance} setBalance={setBalance} sendAction={sendAction} />}
             {currentView === 'dev' && isDevMode && <DevView character={character} />}
-            
-            {/* --- ВЕРТИКАЛЬНОЕ МЕНЮ СЛЕВА СВЕРХУ --- */}
+
             <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <button onClick={() => setIsSettingsOpen(true)} style={{ background: colors.glassBg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '20px', borderRadius: '15px', width: '45px', height: '45px', boxShadow: colors.shadow, backdropFilter: 'blur(10px)' }}>⚙️</button>
                 <button onClick={() => setIsWardrobeOpen(true)} style={{ background: colors.glassBg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '20px', borderRadius: '15px', width: '45px', height: '45px', boxShadow: colors.shadow, backdropFilter: 'blur(10px)' }}>👕</button>
@@ -191,7 +180,6 @@ export default function App() {
                 <button onClick={() => setIsQuestsOpen(true)} style={{ background: colors.glassBg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '20px', borderRadius: '15px', width: '45px', height: '45px', boxShadow: colors.shadow, backdropFilter: 'blur(10px)' }}>📋</button>
             </div>
 
-            {/* --- КОМПАКТНАЯ ПАНЕЛЬ СТАТИСТИКИ (Справа сверху) --- */}
             <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
                 <div onClick={() => isDevMode ? sendAction('balance_add', '100') : setIsShopOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, padding: '8px 15px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: colors.shadow, color: '#f1c40f', fontWeight: 'bold', fontSize: '16px' }}>
                     <span>💰</span><span>{balance}</span>
@@ -205,10 +193,8 @@ export default function App() {
                 <button onClick={() => { sendAction('heal'); incrementQuestProgress(3); }} style={{ background: '#2ecc71', border: 'none', color: 'white', padding: '6px 15px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', boxShadow: colors.shadow }}>{l.heal}</button>
             </div>
 
-            {/* МИКРОФОН */}
             <button onClick={() => setIsVoiceModalOpen(true)} style={{ position: 'absolute', bottom: '20%', right: '20px', zIndex: 100, background: colors.glassBg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '24px', borderRadius: '50%', width: '50px', height: '50px', boxShadow: colors.shadow }}>🎤</button>
 
-            {/* --- ВСПЛЫВАЮЩИЕ ОКНА (МОДАЛКИ) --- */}
             {isSettingsOpen && <SettingsModal onClose={() => setIsSettingsOpen(false)} l={l} colors={colors} theme={theme} setTheme={setTheme} language={language} setLanguage={setLanguage} city={city} setCity={setCity} fetchWeather={fetchWeather} isDark={isDark} isDevMode={isDevMode} setIsDevMode={(val) => {
                 if (!val) { setIsDevMode(false); return; }
                 const pass = prompt("Введите пароль разработчика:");
@@ -219,18 +205,15 @@ export default function App() {
             {isShopOpen && <ShopModal onClose={() => setIsShopOpen(false)} l={l} colors={colors} handlePurchase={handlePurchase} />}
             {isQuestsOpen && <QuestsModal onClose={() => setIsQuestsOpen(false)} l={l} colors={colors} quests={quests} claimQuestReward={claimQuestReward} claimingQuestId={claimingQuestId} />}
             {isVoiceModalOpen && <VoiceModal onClose={cancelRecording} l={l} colors={colors} isRecording={isRecording} startRecording={startRecording} stopRecording={stopRecording} audioUrl={audioUrl} sendRecording={sendRecording} isSending={isSending} restartRecording={restartRecording} cancelRecording={cancelRecording} />}
-            
-            {/* Модалка игр (Открывает Денежные слоты) */}
+
             {isGamesOpen && <GamesModal onClose={() => setIsGamesOpen(false)} l={l} colors={colors} handleGameSelect={handleGameSelect} openSlots={() => { setCurrentView('slots'); setIsGamesOpen(false); }} />}
-            
-            {/* Модалка гардероба (Открывает Рулетку персонажей) */}
+
             <WardrobeModal isOpen={isWardrobeOpen} onClose={() => setIsWardrobeOpen(false)} unlockedCharacters={unlockedCharacters} currentCharacter={character} onSelect={(id) => { setCharacter(id); sendAction('set_char', id); setIsWardrobeOpen(false); }} onUnlockRequest={() => { setIsWheelOpen(true); setIsWardrobeOpen(false); }} l={l} colors={colors} />
-            
-            {/* Сама рулетка персонажей */}
+
             <WheelOfFortune isOpen={isWheelOpen} onClose={() => setIsWheelOpen(false)} balance={balance} setBalance={setBalance} sendAction={sendAction} unlockedCharacters={unlockedCharacters} onUnlock={(charId) => { 
                 setUnlockedCharacters(prev => {
                     const newList = [...prev, charId];
-                    sendAction('unlock_char', JSON.stringify(newList)); // Сохраняем массив в БД!
+                    sendAction('unlock_char', JSON.stringify(newList));
                     return newList;
                 });
                 sendAction('set_char', charId); 
@@ -238,7 +221,6 @@ export default function App() {
             }} colors={colors} l={l} 
             />
 
-            {/* --- НИЖНЕЕ МЕНЮ НАВИГАЦИИ --- */}
             <div style={{ position: 'absolute', bottom: '2%', left: '5%', right: '5%', display: 'flex', justifyContent: 'space-around', background: colors.glassBg, border: `1px solid ${colors.border}`, padding: '15px', borderRadius: '30px', zIndex: 100, backdropFilter: 'blur(15px)', boxShadow: colors.shadow }}>
                 <NavButton icon="🏠" label={l.home} isActive={currentView === 'home'} onClick={() => setCurrentView('home')} colors={colors} />
                 <NavButton icon="🎾" label={l.play} isActive={currentView === 'play'} onClick={() => setCurrentView('play')} colors={colors} />
@@ -246,8 +228,7 @@ export default function App() {
                 <NavButton icon="🚽" label={l.toilet} isActive={currentView === 'toilet'} onClick={() => setCurrentView('toilet')} colors={colors} />
                 {isDevMode && <NavButton icon="🛠" label="Dev" isActive={currentView === 'dev'} onClick={() => setCurrentView('dev')} colors={colors} />}
             </div>
-            
-            {/* ОВЕРЛЕЙ ЭКСТРЕННОГО СПАСЕНИЯ */}
+
             {isRescuing && <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(20,25,40,0.95)', zIndex: 10000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white' }}>
                 <div style={{ fontSize: '60px', marginBottom: '20px', animation: 'float 2s ease-in-out infinite' }}>🌙</div>
                 <h2 style={{ textAlign: 'center', color: '#a29bfe' }}>Питомец истощен...</h2>

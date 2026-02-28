@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 
 const PRIZES = [
-    { id: 'rick', type: 'char', name: 'Рик', color: '#bdc3c7', icon: '👨‍🔬', chance: 30 },
-    { id: 'twilight', type: 'char', name: 'Искорка', color: '#9b59b6', icon: '🦄', chance: 20 },
-    { id: 'coin_50', type: 'coin', amount: 50, name: '50 Монет', color: '#f1c40f', icon: '🪙', chance: 35 },
+    { id: 'rick', type: 'char', name: 'Рик', color: '#bdc3c7', icon: '👨‍🔬', chance: 20 },
+    { id: 'twilight', type: 'char', name: 'Искорка', color: '#9b59b6', icon: '🦄', chance: 10 },
+    { id: 'alien', type: 'char', name: 'Инопрешеленец', color: '#9b59b6', icon: '👽', chance: 5 },
+    { id: 'mannequin', type: 'char', name: 'Маникен', color: '#9b59b6', icon: '👤', chance: 10 },
+    { id: 'robot', type: 'char', name: 'Робот', color: '#9b59b6', icon: '🤖', chance: 10 },
+    { id: 'zombie', type: 'char', name: 'Зомби', color: '#9b59b6', icon: '🧟', chance: 15 },
+    { id: 'coin_50', type: 'coin', amount: 50, name: '50 Монет', color: '#f1c40f', icon: '🪙', chance: 25 },
     { id: 'coin_200', type: 'coin', amount: 200, name: '200 Монет', color: '#2ecc71', icon: '💎', chance: 15 },
 ];
 

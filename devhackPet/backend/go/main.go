@@ -23,7 +23,8 @@ type PSt struct {
 	Nm       string  `json:"nm"`
 	Cstm     string  `json:"cstm"`
 	Tut      int     `json:"tut"`
-	Unlocked string  `json:"unlocked"` // <-- НОВОЕ ПОЛЕ
+	Unlocked string  `json:"unlocked"`
+	Wth      string  `json:"wth"`
 }
 
 type ActReq struct {
@@ -48,7 +49,7 @@ func initDB() {
 		uId TEXT PRIMARY KEY, 
 		hng REAL, eng REAL, md REAL, tl REAL, balance INTEGER,
 		st TEXT, char TEXT, nm TEXT, cstm TEXT, tut INTEGER,
-		unlocked TEXT
+		unlocked TEXT, wth TEXT
 	);`
 	_, err = db.Exec(q)
 	if err != nil {
@@ -58,8 +59,8 @@ func initDB() {
 
 func getPetData(uId string) *PSt {
 	p := &PSt{}
-	r := db.QueryRow("SELECT hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked FROM pts WHERE uId = ?", uId)
-	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.Tl, &p.Balance, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut, &p.Unlocked)
+	r := db.QueryRow("SELECT hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked wth FROM pts WHERE uId = ?", uId)
+	err := r.Scan(&p.Hng, &p.Eng, &p.Md, &p.Tl, &p.Balance, &p.St, &p.Char, &p.Nm, &p.Cstm, &p.Tut, &p.Unlocked, &p.Wth)
 
 	if err == sql.ErrNoRows {
 		p = &PSt{
@@ -69,14 +70,15 @@ func getPetData(uId string) *PSt {
 			Tl:       50,
 			Balance:  1000,
 			St:       "brd",
-			Char:     "twilight", // Искорка дефолт
+			Char:     "twilight",
 			Nm:       "",
 			Cstm:     "none",
 			Tut:      1,
-			Unlocked: `["twilight"]`, // Дефолтный массив
+			Unlocked: `["twilight"]`,
+			Wth: 	  "clr",
 		}
-		db.Exec("INSERT INTO pts (uId, hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-			uId, p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked)
+		db.Exec("INSERT INTO pts (uId, hng, eng, md, tl, balance, st, char, nm, cstm, tut, unlocked, wth) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			uId, p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked, p.Wth)
 	}
 	return p
 }
@@ -149,7 +151,7 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 			p.Balance += add
 		}
 	case "unlock_char":
-		p.Unlocked = rq.PLd // <-- Обрабатываем получение массива
+		p.Unlocked = rq.PLd
 	case "set_nm":
 		p.Nm = rq.PLd
 	case "set_char":
@@ -160,10 +162,12 @@ func hAct(w http.ResponseWriter, r *http.Request) {
 		p.Cstm = "none"
 	case "tut_dn":
 		p.Tut = 0
+	case "set_wth":
+		p.Wth = rq.PLd
 	}
 
-	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=?, balance=?, st=?, char=?, nm=?, cstm=?, tut=?, unlocked=? WHERE uId=?",
-		p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked, rq.UId)
+	db.Exec("UPDATE pts SET hng=?, eng=?, md=?, tl=?, balance=?, st=?, char=?, nm=?, cstm=?, tut=?, unlocked=? wth=? WHERE uId=?",
+		p.Hng, p.Eng, p.Md, p.Tl, p.Balance, p.St, p.Char, p.Nm, p.Cstm, p.Tut, p.Unlocked, p.Wth, rq.UId)
 	mu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")

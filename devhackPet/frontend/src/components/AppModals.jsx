@@ -64,13 +64,8 @@ export function GamesModal({ onClose, l, colors, handleGameSelect, openSlots }) 
                     >
                         <span style={{ fontWeight: 'bold', color: '#fff', fontSize: '18px' }}>🎰 Денежные Слоты</span>
                     </div>
+
                     
-                    {['Викторина', 'Кликер', 'Мемори'].map((game, i) => (
-                        <div key={i} onClick={() => handleGameSelect('game')} style={{ background: colors.glassBg, border: `1px solid ${colors.border}`, borderRadius: '16px', padding: '15px', display: 'flex', justifyContent: 'space-between', cursor: 'pointer' }}>
-                            <span style={{ fontWeight: 'bold' }}>🎮 {game}</span>
-                            <span style={{ background: '#8ac6d1', padding: '5px 12px', borderRadius: '20px', color: '#fff' }}>+10</span>
-                        </div>
-                    ))}
                 </div>
             </div>
         </div>

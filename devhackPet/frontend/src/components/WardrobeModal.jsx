@@ -2,7 +2,11 @@ import React from 'react';
 
 const CHARACTERS = [
     { id: 'twilight', name: 'Искорка', icon: '🦄', rarity: 'Дефолт', color: '#9b59b6' },
-    { id: 'rick', name: 'Рик', icon: '👨‍🔬', rarity: 'Обычная', color: '#bdc3c7' }
+    { id: 'rick', name: 'Рик', icon: '👨‍🔬', rarity: 'Обычная', color: '#bdc3c7' },
+    { id: 'alien',  rarity: 'Легендарная', name: 'Инопрешеленец', color: '#15ff00', icon: '👽' },
+    { id: 'mannequin', rarity: 'Эпическая', name: 'Маникен', color: '#0080ff', icon: '👤' },
+    { id: 'robot', rarity: 'Эпическая', name: 'Робот', color: '#0080ff', icon: '🤖'},
+    { id: 'zombie', rarity:'редкая', name: 'Зомби', color: '#9b59b6', icon: '🧟'}
 ];
 
 export default function WardrobeModal({ isOpen, onClose, unlockedCharacters, currentCharacter, onSelect, onUnlockRequest, l, colors }) {
