@@ -14,11 +14,15 @@ import { LoadingScreen, WeatherOverlay, NavButton, StatBar } from './components/
 import { SettingsModal, ShopModal, GamesModal, QuestsModal, VoiceModal } from './components/AppModals';
 import { loc, initialQuests, ANIMATIONS_LIST } from './config';
 import './index.css';
+import Tutirial from './components/Tutorial';
 
 export default function App() {
     const [currentView, setCurrentView] = useState('home');
     const [character, setCharacter] = useState('twilight');
     const [isGreeting, setIsGreeting] = useState(true);
+    const [showTutorial, setShowTutorial] = useState(false);
+    const [petName, setPetName] = useState('Питомец'); 
+    const [inputName, setInputName] = useState('');
 
     const [stats, setStats] = useState({ hng: 100, eng: 100, md: 100, tl: 50 });
     const [balance, setBalance] = useState(1000); 
@@ -73,10 +77,16 @@ export default function App() {
         .then(data => { 
             if (data) {
                 setStats({ hng: data.hng, eng: data.eng, md: data.md, tl: data.tl !== undefined ? data.tl : 50 });
-                    if (data.balance !== undefined) setBalance(data.balance);
-                    if (data.unlocked);
+                if (data.balance !== undefined) setBalance(data.balance);
+                if (data.wth) setWeather(data.wth);
 
-                    if (data.wth) setWeather(data.wth);
+                if (data.tut === 1) setShowTutorial(true);
+                else setShowTutorial(false);
+                if (data.nm) setPetName(data.nm);
+                if (data.unlocked) {
+                    try { setUnlockedCharacters(JSON.parse(data.unlocked)); } 
+                    catch (e) { console.error("Ошибка парсинга", e); }
+                }
             }
         }).catch(err => console.log("Бэкенд недоступен"));
     };
@@ -84,18 +94,22 @@ export default function App() {
     useEffect(() => {
         const fetchStats = () => {
             fetch(`/api/pet?uId=${PLAYER_ID}`).then(res => res.json())
-                .then(data => { 
-        if (data) {
-            setStats({ hng: data.hng, eng: data.eng, md: data.md, tl: data.tl !== undefined ? data.tl : 50 });
-            if (data.balance !== undefined) setBalance(data.balance);
+            .then(data => { 
+            if (data) {
+                setStats({ hng: data.hng, eng: data.eng, md: data.md, tl: data.tl !== undefined ? data.tl : 50 });
+                if (data.balance !== undefined) setBalance(data.balance);
+                if (data.wth) setWeather(data.wth);
+                
+                if (data.tut === 1) setShowTutorial(true);
+                else setShowTutorial(false);
+                if (data.nm) setPetName(data.nm);
 
-            if (data.unlocked) {
-                try {
-                    setUnlockedCharacters(JSON.parse(data.unlocked));
-                } catch (e) { console.error("Ошибка парсинга персонажей", e); }
+                if (data.unlocked) {
+                    try { setUnlockedCharacters(JSON.parse(data.unlocked)); } 
+                    catch (e) { console.error("Ошибка парсинга", e); }
+                }
             }
-        }
-    }).catch(err => console.log("Бэкенд недоступен"));
+        }).catch(err => console.log("Бэкенд недоступен"));
         };
         fetchStats();
         const syncLoop = setInterval(fetchStats, 3000);
@@ -180,15 +194,27 @@ export default function App() {
                 <button onClick={() => setIsQuestsOpen(true)} style={{ background: colors.glassBg, border: `1px solid ${colors.border}`, color: colors.text, fontSize: '20px', borderRadius: '15px', width: '45px', height: '45px', boxShadow: colors.shadow, backdropFilter: 'blur(10px)' }}>📋</button>
             </div>
 
-            <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
-                <div onClick={() => isDevMode ? sendAction('balance_add', '100') : setIsShopOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, padding: '8px 15px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: colors.shadow, color: '#f1c40f', fontWeight: 'bold', fontSize: '16px' }}>
-                    <span>💰</span><span>{balance}</span>
+            {petName && (
+                <div style={{ 
+                    position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', 
+                    zIndex: 100, background: colors.glassBg, backdropFilter: 'blur(10px)', 
+                    border: `1px solid ${colors.border}`, padding: '8px 25px', borderRadius: '20px', 
+                    color: colors.text, fontWeight: '900', fontSize: '18px', boxShadow: colors.shadow, 
+                    letterSpacing: '2px', textTransform: 'uppercase' 
+                }}>
+                    {petName}
                 </div>
+            )}
+
+            <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 100, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
                 <div style={{ display: 'flex', gap: '6px', background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, padding: '8px', borderRadius: '20px', boxShadow: colors.shadow }}>
                     <StatBar icon="🍖" value={Math.round(stats.hng)} color="#ff6b6b" onClick={() => sendAction('dev_minus_hng')} isInteractive={isDevMode} />
                     <StatBar icon="⚡" value={Math.round(stats.eng)} color="#feca57" onClick={() => sendAction('dev_minus_eng')} isInteractive={isDevMode} />
                     <StatBar icon="💖" value={Math.round(stats.md)} color="#ff9ff3" onClick={() => sendAction('dev_minus_md')} isInteractive={isDevMode} />
                     <StatBar icon="🚽" value={Math.round(stats.tl)} color="#1e90ff" onClick={() => sendAction('dev_minus_tl')} isInteractive={isDevMode} />
+                </div>
+                <div onClick={() => isDevMode ? sendAction('balance_add', '100') : setIsShopOpen(true)} style={{ background: colors.glassBg, backdropFilter: 'blur(10px)', border: `1px solid ${colors.border}`, padding: '8px 15px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: colors.shadow, color: '#f1c40f', fontWeight: 'bold', fontSize: '16px' }}>
+                    <span>💰</span><span>{balance}</span>
                 </div>
                 <button onClick={() => { sendAction('heal'); incrementQuestProgress(3); }} style={{ background: '#2ecc71', border: 'none', color: 'white', padding: '6px 15px', borderRadius: '15px', cursor: 'pointer', fontWeight: 'bold', fontSize: '12px', boxShadow: colors.shadow }}>{l.heal}</button>
             </div>
@@ -236,6 +262,46 @@ export default function App() {
                     <div style={{ width: '100%', height: '100%', background: '#a29bfe', animation: 'fillBar 3s linear forwards' }} />
                 </div>
             </div>}
+            {showTutorial && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(20,25,40,0.85)', backdropFilter: 'blur(5px)', zIndex: 15000, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: 'white', padding: '20px', textAlign: 'center', animation: 'fadeIn 0.5s ease' }}>
+                    
+                    <div style={{ background: 'linear-gradient(135deg, #34495e, #2c3e50)', border: '2px solid #3498db', borderRadius: '25px', padding: '30px', maxWidth: '400px', boxShadow: '0 20px 50px rgba(0,0,0,0.8)' }}>
+                        <h2 style={{ color: '#3498db', marginTop: 0, fontSize: '26px' }}>Добро пожаловать!</h2>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', textAlign: 'left', fontSize: '15px', marginBottom: '20px' }}>
+                            <div>🍖 <b>Следи за статами:</b> Корми, играй и укладывай спать своего питомца.</div>
+                            <div>💰 <b>Зарабатывай монеты:</b> Заходи в раздел игр и ГЕМБЛИ ПО СТРАШНОМУ!</div>
+                            <div>👕 <b>Открывай скины:</b> Загляни в гардероб, чтобы загемблить новые уникальные 3D-костюмы.</div>
+                        </div>
+
+                        <div style={{ background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '15px', border: '1px solid #7f8c8d' }}>
+                            <div style={{ fontWeight: 'bold', marginBottom: '10px', color: '#ecf0f1' }}>Как назовешь питомца?</div>
+                            <input 
+                                type="text" 
+                                value={inputName} 
+                                onChange={(e) => setInputName(e.target.value)}
+                                placeholder="Введи имя..."
+                                maxLength={12}
+                                style={{ width: '100%', padding: '12px', borderRadius: '12px', border: '2px solid #3498db', outline: 'none', fontSize: '16px', boxSizing: 'border-box', background: '#ecf0f1', color: '#2c3e50', fontWeight: 'bold', textAlign: 'center' }}
+                            />
+                        </div>
+
+                        <button 
+                            onClick={() => { 
+                                const finalName = inputName.trim() || 'Питомец';
+                                sendAction('set_nm', finalName);
+                                setPetName(finalName);
+
+                                setShowTutorial(false); 
+                                sendAction('tut_dn'); 
+                            }} 
+                            style={{ marginTop: '25px', width: '100%', padding: '15px', background: 'linear-gradient(180deg, #2ecc71 0%, #27ae60 100%)', color: 'white', border: 'none', borderRadius: '20px', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 5px 15px rgba(46, 204, 113, 0.4)' }}
+                        >
+                            Начать игру!
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
