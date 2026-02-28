@@ -1,4 +1,3 @@
-```markdown
 # Цифровой питомец "Envelope"
 
 Проект команды **envelope()** для хакатона Digital Pet.  
